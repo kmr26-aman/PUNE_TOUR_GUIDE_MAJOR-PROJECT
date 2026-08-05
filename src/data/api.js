@@ -12,6 +12,11 @@ const resolveApiBaseUrl = () => {
   
   url = url.trim().replace(/[\.\s]+$/, '').replace(/\/+$/, '');
   
+  // Force HTTPS if hosted page is HTTPS to prevent Mixed Content browser blocks
+  if (typeof window !== 'undefined' && window.location.protocol === 'https:' && url.startsWith('http://')) {
+    url = url.replace('http://', 'https://');
+  }
+
   if (!url.endsWith('/api')) {
     url += '/api';
   }

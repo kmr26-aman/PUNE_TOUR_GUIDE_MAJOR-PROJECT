@@ -45,49 +45,23 @@ const port = process.env.PORT || 3000;
 // Enable HTTP response Gzip compression
 app.use(compression());
 
-// Configure secure helmet headers with custom CSP for Leaflet maps and Google Fonts in production
+// Configure permissive CORS first so preflight & cross-origin responses pass smoothly
+app.use(cors({
+  origin: true,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
+}));
+
+// Configure helmet with cross-origin resource sharing enabled
 app.use(
   helmet({
-    contentSecurityPolicy: process.env.NODE_ENV === 'production' ? {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'"],
-        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-        fontSrc: ["'self'", "https://fonts.gstatic.com"],
-        imgSrc: [
-          "'self'",
-          "data:",
-          "blob:",
-          "https://*.basemaps.cartocdn.com",
-          "https://*.tile.openstreetmap.org",
-        ],
-        connectSrc: ["'self'", "https://router.project-osrm.org"],
-      },
-    } : false,
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    crossOriginOpenerPolicy: false,
+    contentSecurityPolicy: false,
   })
 );
 
-// CORS — allow local dev + all Vercel frontend deployments
-const allowedOrigins = [
-  'http://localhost:5173',
-  'http://localhost:5174',
-  'http://localhost:3000',
-  'http://localhost:3001',
-];
-
-app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps, curl, server-to-server)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin) || /\.vercel\.app$/.test(origin)) {
-      return callback(null, true);
-    }
-    return callback(null, true); // Permissive CORS for seamless production integration
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
-}));
 app.use(express.json());
 
 // Request Logger Middleware
