@@ -1,4 +1,16 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
+const resolveApiBaseUrl = () => {
+  const envUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL;
+  let url = envUrl || (typeof window !== 'undefined' && window.location.hostname !== 'localhost' ? '/api' : 'http://localhost:3001/api');
+  
+  url = url.trim().replace(/[\.\s]+$/, '').replace(/\/+$/, '');
+  
+  if (!url.endsWith('/api')) {
+    url += '/api';
+  }
+  return url;
+};
+
+export const API_BASE_URL = resolveApiBaseUrl();
 
 // Client-side in-memory cache
 const apiCache = new Map();
@@ -42,70 +54,99 @@ const getHeaders = (extraHeaders = {}) => {
   return headers;
 };
 
+const parseErrorResponse = async (response, fallbackMessage) => {
+  let errorMsg = fallbackMessage;
+  try {
+    const errorData = await response.json();
+    errorMsg = errorData.error || errorData.message || fallbackMessage;
+  } catch {
+    errorMsg = `${fallbackMessage} (${response.status}: ${response.statusText || 'Server Error'})`;
+  }
+  return new Error(errorMsg);
+};
+
 export const loginUser = async (email, password) => {
   clearApiCache();
-  const response = await fetch(`${API_BASE_URL}/user/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password })
-  });
+  try {
+    const response = await fetch(`${API_BASE_URL}/user/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
 
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || 'Login failed');
-  }
+    if (!response.ok) {
+      throw await parseErrorResponse(response, 'Login failed');
+    }
 
-  const data = await response.json();
-  if (data.token) {
-    localStorage.setItem('pune_auth_token', data.token);
-    localStorage.setItem('pune_user_name', data.user.name);
+    const data = await response.json();
+    if (data.token) {
+      localStorage.setItem('pune_auth_token', data.token);
+      if (data.user?.name) localStorage.setItem('pune_user_name', data.user.name);
+      if (data.user?.avatarUrl) localStorage.setItem('pune_user_avatar', data.user.avatarUrl);
+    }
+    return data;
+  } catch (err) {
+    if (err.name === 'TypeError' && err.message.includes('fetch')) {
+      throw new Error('Unable to connect to server. Please check your network connection.');
+    }
+    throw err;
   }
-  return data;
 };
 
 export const registerUser = async (name, email, password) => {
   clearApiCache();
-  const response = await fetch(`${API_BASE_URL}/user/register`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, email, password })
-  });
+  try {
+    const response = await fetch(`${API_BASE_URL}/user/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, password })
+    });
 
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || 'Registration failed');
-  }
+    if (!response.ok) {
+      throw await parseErrorResponse(response, 'Registration failed');
+    }
 
-  const data = await response.json();
-  if (data.token) {
-    localStorage.setItem('pune_auth_token', data.token);
-    localStorage.setItem('pune_user_name', data.user.name);
+    const data = await response.json();
+    if (data.token) {
+      localStorage.setItem('pune_auth_token', data.token);
+      if (data.user?.name) localStorage.setItem('pune_user_name', data.user.name);
+      if (data.user?.avatarUrl) localStorage.setItem('pune_user_avatar', data.user.avatarUrl);
+    }
+    return data;
+  } catch (err) {
+    if (err.name === 'TypeError' && err.message.includes('fetch')) {
+      throw new Error('Unable to connect to server. Please check your network connection.');
+    }
+    throw err;
   }
-  return data;
 };
 
 export const googleAuthUser = async (googleData) => {
   clearApiCache();
-  const response = await fetch(`${API_BASE_URL}/user/google-auth`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(googleData)
-  });
+  try {
+    const response = await fetch(`${API_BASE_URL}/user/google-auth`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(googleData)
+    });
 
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || 'Google authentication failed');
-  }
-
-  const data = await response.json();
-  if (data.token) {
-    localStorage.setItem('pune_auth_token', data.token);
-    localStorage.setItem('pune_user_name', data.user.name);
-    if (data.user.avatarUrl) {
-      localStorage.setItem('pune_user_avatar', data.user.avatarUrl);
+    if (!response.ok) {
+      throw await parseErrorResponse(response, 'Google authentication failed');
     }
+
+    const data = await response.json();
+    if (data.token) {
+      localStorage.setItem('pune_auth_token', data.token);
+      if (data.user?.name) localStorage.setItem('pune_user_name', data.user.name);
+      if (data.user?.avatarUrl) localStorage.setItem('pune_user_avatar', data.user.avatarUrl);
+    }
+    return data;
+  } catch (err) {
+    if (err.name === 'TypeError' && err.message.includes('fetch')) {
+      throw new Error('Unable to connect to server. Please check your network connection.');
+    }
+    throw err;
   }
-  return data;
 };
 
 export const fetchUserMe = async () => {

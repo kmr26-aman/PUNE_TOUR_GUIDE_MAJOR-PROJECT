@@ -28,12 +28,17 @@ export const registerUser = async (req: Request, res: Response) => {
         name,
         email,
         password: hashedPassword,
-        xp: 150 // Start with some bonus sign-up XP!
+        avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(name)}`,
+        xp: 150 // Start with bonus sign-up XP!
       }
     });
 
-    // Pre-seed a default itinerary for the new user so they have a great experience right away
-    await createDefaultItineraryForUser(user.id);
+    // Pre-seed a default itinerary for the new user safely
+    try {
+      await createDefaultItineraryForUser(user.id);
+    } catch (itineraryError) {
+      console.warn('Failed to pre-seed default itinerary during registration:', itineraryError);
+    }
 
     const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
 
@@ -43,12 +48,13 @@ export const registerUser = async (req: Request, res: Response) => {
         id: user.id,
         name: user.name,
         email: user.email,
+        avatarUrl: user.avatarUrl,
         xp: user.xp,
       }
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Registration error:', error);
-    res.status(500).json({ error: 'Registration failed' });
+    res.status(500).json({ error: error?.message || 'Registration failed' });
   }
 };
 
@@ -61,8 +67,12 @@ export const loginUser = async (req: Request, res: Response) => {
     }
 
     const user = await prisma.user.findUnique({ where: { email } });
-    if (!user || !user.password) {
+    if (!user) {
       return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    if (!user.password) {
+      return res.status(400).json({ error: 'Account created with Google. Please use Continue with Google to log in.' });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
@@ -78,12 +88,13 @@ export const loginUser = async (req: Request, res: Response) => {
         id: user.id,
         name: user.name,
         email: user.email,
+        avatarUrl: user.avatarUrl,
         xp: user.xp
       }
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Login error:', error);
-    res.status(500).json({ error: 'Login failed' });
+    res.status(500).json({ error: error?.message || 'Login failed' });
   }
 };
 
