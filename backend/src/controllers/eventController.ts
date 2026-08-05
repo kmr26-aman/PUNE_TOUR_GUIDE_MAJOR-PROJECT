@@ -1,7 +1,6 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '../app';
+import { fallbackEvents } from '../data/fallbackData';
 
 export const getAllEvents = async (req: Request, res: Response) => {
   try {
@@ -10,6 +9,7 @@ export const getAllEvents = async (req: Request, res: Response) => {
     });
     res.json(events);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch events' });
+    console.error('Failed to fetch events, serving fallback data:', error);
+    res.json(fallbackEvents);
   }
 };

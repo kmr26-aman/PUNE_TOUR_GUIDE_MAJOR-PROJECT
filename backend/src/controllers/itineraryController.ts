@@ -1,9 +1,78 @@
 import { Response } from 'express';
-import { PrismaClient } from '@prisma/client';
 import axios from 'axios';
 import { AuthRequest } from '../middleware/auth';
+import { getCachedData, setCachedData, invalidateCache } from '../services/cacheService';
+import { prisma } from '../app';
+import { fallbackItinerary } from '../data/fallbackData';
 
-const prisma = new PrismaClient();
+/**
+ * Creates and seeds a default 2-day itinerary for a user.
+ * This is used for self-healing if a user has no itinerary, or for new user registration.
+ * @param userId - The ID of the user.
+ * @returns The newly created itinerary days with stops.
+ */
+export const createDefaultItineraryForUser = async (userId: number) => {
+  const day1 = await prisma.itineraryDay.create({
+    data: {
+      day: 1,
+      label: "Day 1 · Sat",
+      userId: userId
+    }
+  });
+  const day2 = await prisma.itineraryDay.create({
+    data: {
+      day: 2,
+      label: "Day 2 · Sun",
+      userId: userId
+    }
+  });
+
+  await prisma.itineraryStop.createMany({
+    data: [
+      {
+        itineraryDayId: day1.id,
+        time: "09:00 AM",
+        name: "Shaniwar Wada",
+        name_mr: "शनिवार वाडा",
+        desc: "Explore the primary fortress seat of the Peshwas.",
+        desc_mr: "पेशव्यांचे मुख्य ऐतिहासिक निवासस्थान एक्सप्लोर करा.",
+        dotColor: "#8B3A2A",
+        tags: [{ label: "Heritage", type: "heritage" }]
+      },
+      {
+        itineraryDayId: day1.id,
+        time: "11:30 AM",
+        name: "Dagdusheth Halwai Ganpati",
+        name_mr: "दगडूशेठ हलवाई गणपती",
+        desc: "Pay a visit to the most celebrated golden Ganpati temple in Pune.",
+        desc_mr: "पुण्यातील सर्वात प्रसिद्ध सोन्याच्या गणपती मंदिराला भेट द्या.",
+        dotColor: "#B87318",
+        tags: [{ label: "Temple", type: "neutral" }]
+      },
+      {
+        itineraryDayId: day2.id,
+        time: "08:30 AM",
+        name: "Pataleshwar Caves",
+        name_mr: "पाताळेश्वर लेणी",
+        desc: "Marvel at the ancient 8th-century rock-cut monolithic Shiva shrine.",
+        desc_mr: "८ व्या शतकातील प्राचीन पाताळेश्वर शिव मंदिराला भेट द्या.",
+        dotColor: "#4A6741",
+        tags: [{ label: "Heritage", type: "heritage" }]
+      }
+    ]
+  });
+
+  // Return the newly created itinerary
+  return prisma.itineraryDay.findMany({
+    where: { userId: userId },
+    include: {
+      stops: {
+        orderBy: { order: 'asc' }
+      }
+    },
+    orderBy: { day: 'asc' }
+  });
+};
 
 export const getItinerary = async (req: AuthRequest, res: Response) => {
   try {
@@ -12,6 +81,13 @@ export const getItinerary = async (req: AuthRequest, res: Response) => {
     }
 
     const userId = req.user.id;
+    const cacheKey = `itinerary:${userId}`;
+
+    // 1. Check for cached itinerary first
+    const cachedItinerary = await getCachedData<any[]>(cacheKey);
+    if (cachedItinerary) {
+      return res.json(cachedItinerary);
+    }
 
     // Check if user exists in database to handle stale tokens
     const userExists = await prisma.user.findUnique({ where: { id: userId } });
@@ -31,72 +107,17 @@ export const getItinerary = async (req: AuthRequest, res: Response) => {
 
     // Self-healing: if user has no itinerary days, auto-create and seed them
     if (itinerary.length === 0) {
-      const day1 = await prisma.itineraryDay.create({
-        data: {
-          day: 1,
-          label: "Day 1 · Sat",
-          userId
-        }
-      });
-      const day2 = await prisma.itineraryDay.create({
-        data: {
-          day: 2,
-          label: "Day 2 · Sun",
-          userId
-        }
-      });
-
-      await prisma.itineraryStop.createMany({
-        data: [
-          {
-            itineraryDayId: day1.id,
-            time: "09:00 AM",
-            name: "Shaniwar Wada",
-            name_mr: "शनिवार वाडा",
-            desc: "Explore the primary fortress seat of the Peshwas.",
-            desc_mr: "पेशव्यांचे मुख्य ऐतिहासिक निवासस्थान एक्सप्लोर करा.",
-            dotColor: "#8B3A2A",
-            tags: [{ label: "Heritage", type: "heritage" }]
-          },
-          {
-            itineraryDayId: day1.id,
-            time: "11:30 AM",
-            name: "Dagdusheth Halwai Ganpati",
-            name_mr: "दगडूशेठ हलवाई गणपती",
-            desc: "Pay a visit to the most celebrated golden Ganpati temple in Pune.",
-            desc_mr: "पुण्यातील सर्वात प्रसिद्ध सोन्याच्या गणपती मंदिराला भेट द्या.",
-            dotColor: "#B87318",
-            tags: [{ label: "Temple", type: "neutral" }]
-          },
-          {
-            itineraryDayId: day2.id,
-            time: "08:30 AM",
-            name: "Pataleshwar Caves",
-            name_mr: "पाताळेश्वर लेणी",
-            desc: "Marvel at the ancient 8th-century rock-cut monolithic Shiva shrine.",
-            desc_mr: "८ व्या शतकातील प्राचीन पाताळेश्वर शिव मंदिराला भेट द्या.",
-            dotColor: "#4A6741",
-            tags: [{ label: "Heritage", type: "heritage" }]
-          }
-        ]
-      });
-
-      // Refetch the newly created itinerary
-      itinerary = await prisma.itineraryDay.findMany({
-        where: { userId },
-        include: {
-          stops: {
-            orderBy: { order: 'asc' }
-          }
-        },
-        orderBy: { day: 'asc' }
-      });
+      console.log(`User ${userId} has no itinerary. Creating a default one.`);
+      itinerary = await createDefaultItineraryForUser(userId);
     }
+
+    // 2. Cache the result before returning
+    await setCachedData(cacheKey, itinerary, 900); // Cache for 15 minutes
 
     res.json(itinerary);
   } catch (error) {
-    console.error("Failed to fetch itinerary:", error);
-    res.status(500).json({ error: 'Failed to fetch itinerary' });
+    console.error("Failed to fetch itinerary, serving fallback data:", error);
+    res.json(fallbackItinerary);
   }
 };
 
@@ -136,6 +157,10 @@ export const toggleStopStatus = async (req: AuthRequest, res: Response) => {
       console.log(`[XP] User ${userId} gained +50 XP for completing stop: ${stop.name}`);
     }
 
+    // Invalidate cache
+    await invalidateCache(`itinerary:${userId}`);
+    await invalidateCache(`user:stats:${userId}`);
+
     res.json(updatedStop);
   } catch (error) {
     console.error("Failed to update stop status:", error);
@@ -149,7 +174,7 @@ export const addStopToItinerary = async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const { itineraryDayId, name, name_mr, time, desc, desc_mr, dotColor, tags } = req.body;
+    const { itineraryDayId, placeId, name, name_mr, time, desc, desc_mr, dotColor, tags } = req.body;
     const userId = req.user.id;
 
     let targetDayId = Number(itineraryDayId);
@@ -157,6 +182,7 @@ export const addStopToItinerary = async (req: AuthRequest, res: Response) => {
 
     // Fallback: If day is missing or does not belong to user, find/create user's Day 1
     if (!day || day.userId !== userId) {
+      console.log("User ID =", userId);
       let userDay1 = await prisma.itineraryDay.findFirst({
         where: { userId, day: 1 }
       });
@@ -168,18 +194,42 @@ export const addStopToItinerary = async (req: AuthRequest, res: Response) => {
       targetDayId = userDay1.id;
     }
 
+    let stopData: any = {
+      name: String(name || 'Custom Stop'),
+      name_mr: name_mr ? String(name_mr) : String(name || 'Custom Stop'),
+      time: String(time || 'TBD'),
+      desc: String(desc || ''),
+      desc_mr: desc_mr ? String(desc_mr) : String(desc || ''),
+      dotColor: String(dotColor || '#8B3A2A'),
+      tags: Array.isArray(tags) ? tags : []
+    };
+
+    // If placeId is provided, fetch place details to populate the stop
+    if (placeId) {
+      const place = await prisma.place.findUnique({ where: { id: Number(placeId) } });
+      if (place) {
+        stopData = {
+          ...stopData,
+          name: place.name,
+          name_mr: place.name_mr,
+          desc: place.description,
+          desc_mr: place.description_mr,
+          dotColor: getCategoryColor(place.category),
+          tags: [{ label: place.category, type: place.category.toLowerCase() }]
+        };
+      }
+    }
+
     const newStop = await prisma.itineraryStop.create({
       data: {
-        name: String(name || 'Custom Stop'),
-        name_mr: name_mr ? String(name_mr) : String(name || 'Custom Stop'),
-        time: String(time || 'TBD'),
-        desc: String(desc || ''),
-        desc_mr: desc_mr ? String(desc_mr) : String(desc || ''),
-        dotColor: String(dotColor || '#8B3A2A'),
+        ...stopData,
         itineraryDayId: targetDayId,
-        tags: Array.isArray(tags) ? tags : []
       }
     });
+
+    // Invalidate cache
+    await invalidateCache(`itinerary:${userId}`);
+
     res.json(newStop);
   } catch (error) {
     console.error("Failed to add stop to itinerary:", error);
@@ -209,10 +259,86 @@ export const deleteStopFromItinerary = async (req: AuthRequest, res: Response) =
     await prisma.itineraryStop.delete({
       where: { id: Number(id) }
     });
+
+    // Invalidate cache
+    await invalidateCache(`itinerary:${userId}`);
+
     res.json({ success: true, message: "Stop deleted successfully" });
   } catch (error) {
     console.error("Failed to delete stop:", error);
     res.status(500).json({ error: 'Failed to delete stop' });
+  }
+};
+
+/**
+ * Reorders stops for a given itinerary day using OSRM for route optimization.
+ * @param itineraryDayId - The ID of the itinerary day.
+ * @param profile - The OSRM routing profile ('foot' for walking, 'driving' for driving).
+ */
+const reorderStopsWithOSRM = async (itineraryDayId: number, profile: 'foot' | 'driving' = 'driving'): Promise<void> => {
+  const stops = await prisma.itineraryStop.findMany({
+    where: { itineraryDayId }
+  });
+
+  if (stops.length < 2) {
+    return; // Not enough stops to optimize
+  }
+
+  const placeNames = stops.map(s => s.name.toLowerCase());
+  const places = await prisma.place.findMany({
+    where: {
+      name: {
+        in: placeNames,
+        mode: 'insensitive'
+      }
+    }
+  });
+
+  const stopsWithCoords = stops.map(stop => {
+    const matchedPlace = places.find(p => p.name.toLowerCase() === stop.name.toLowerCase());
+    return {
+      stop,
+      lat: matchedPlace?.latitude,
+      lng: matchedPlace?.longitude
+    };
+  }).filter(s => s.lat != null && s.lng != null);
+
+  if (stopsWithCoords.length < 2) {
+    return; // Not enough geocoded stops to optimize
+  }
+
+  const coordsStr = stopsWithCoords.map(s => `${s.lng},${s.lat}`).join(';');
+  const url = `https://router.project-osrm.org/trip/v1/${profile}/${coordsStr}?source=first&destination=any&roundtrip=false`;
+
+  try {
+    const response = await axios.get(url);
+    const data = response.data;
+
+    if (data.code === 'Ok' && data.waypoints) {
+      const sortedWaypoints = [...data.waypoints].sort((a: any, b: any) => a.trips_index - b.trips_index);
+
+      for (let i = 0; i < sortedWaypoints.length; i++) {
+        const wp = sortedWaypoints[i];
+        const stopItem = stopsWithCoords[wp.waypoint_index];
+        await prisma.itineraryStop.update({ where: { id: stopItem.stop.id }, data: { order: i } });
+      }
+    } else {
+      // Log a warning if OSRM returns a non-OK code
+      console.warn(`[OSRM] Optimization for day ${itineraryDayId} completed but returned code: ${data.code}`);
+    }
+  } catch (error) {
+    // Log detailed error information from Axios
+    if (axios.isAxiosError(error)) {
+      console.error(`[OSRM] Axios error during optimization for day ${itineraryDayId}:`, {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message,
+      });
+    } else {
+      console.error(`[OSRM] Generic error during optimization for day ${itineraryDayId}:`, error);
+    }
+    // Re-throw the error to be handled by the calling function
+    throw error;
   }
 };
 
@@ -234,77 +360,20 @@ export const optimizeItinerary = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ error: 'Unauthorized or day not found' });
     }
 
-    // 2. Fetch stops for this day
-    const stops = await prisma.itineraryStop.findMany({
-      where: { itineraryDayId: Number(itineraryDayId) }
-    });
-
-    if (stops.length < 3) {
-      return res.json(stops);
-    }
-
-    // 3. Find matching coordinates for each stop
-    const placeNames = stops.map(s => s.name.toLowerCase());
-    const places = await prisma.place.findMany({
-      where: {
-        name: {
-          in: placeNames,
-          mode: 'insensitive'
-        }
-      }
-    });
-
-    // Map stops to their coordinates
-    const stopsWithCoords = stops.map((stop, index) => {
-      const matchedPlace = places.find(p => p.name.toLowerCase() === stop.name.toLowerCase());
-      return {
-        stop,
-        index,
-        lat: matchedPlace?.latitude,
-        lng: matchedPlace?.longitude
-      };
-    }).filter(s => s.lat !== null && s.lng !== null && s.lat !== undefined && s.lng !== undefined);
-
-    if (stopsWithCoords.length < 3) {
-      return res.json(stops);
-    }
-
-    // 4. Query OSRM Trip API
+    // 2. Optimize stop order using the shared helper
     const profile = mode === 'Walking' ? 'foot' : 'driving';
-    const coordsStr = stopsWithCoords.map(s => `${s.lng},${s.lat}`).join(';');
-    
-    // OSRM Trip API starting at the first coordinate
-    const url = `https://router.project-osrm.org/trip/v1/${profile}/${coordsStr}?source=first&destination=any&roundtrip=false`;
-    
-    const response = await axios.get(url);
-    const data = response.data;
+    await reorderStopsWithOSRM(Number(itineraryDayId), profile);
 
-    if (data.code === 'Ok' && data.waypoints) {
-      // Sort waypoints by trips_index to get optimized sequence
-      const sortedWaypoints = [...data.waypoints].sort((a: any, b: any) => a.trips_index - b.trips_index);
-      
-      // Update stop orders
-      for (let i = 0; i < sortedWaypoints.length; i++) {
-        const wp = sortedWaypoints[i];
-        const stopItem = stopsWithCoords[wp.waypoint_index];
-        
-        await prisma.itineraryStop.update({
-          where: { id: stopItem.stop.id },
-          data: { order: i }
-        });
-      }
-      
-      // Fetch optimized stops sorted by new order
-      const optimizedStops = await prisma.itineraryStop.findMany({
-        where: { itineraryDayId: Number(itineraryDayId) },
-        orderBy: { order: 'asc' }
-      });
-      
-      return res.json(optimizedStops);
-    } else {
-      console.warn('[OSRM] Optimization failed. Code:', data.code);
-      return res.status(400).json({ error: 'Trip optimization failed' });
-    }
+    // 3. Fetch and return the newly ordered stops
+    const optimizedStops = await prisma.itineraryStop.findMany({
+      where: { itineraryDayId: Number(itineraryDayId) },
+      orderBy: { order: 'asc' }
+    });
+
+    // Invalidate cache
+    await invalidateCache(`itinerary:${userId}`);
+
+    res.json(optimizedStops);
   } catch (error) {
     console.error('Optimization error:', error);
     res.status(500).json({ error: 'Failed to optimize itinerary' });
@@ -319,6 +388,27 @@ export const generateItinerary = async (req: AuthRequest, res: Response) => {
 
     const { days, categories, pace, accessibleOnly, userLanguage } = req.body;
     const userId = req.user.id;
+
+    // --- Input Validation ---
+    const daysCountNum = Number(days);
+    if (isNaN(daysCountNum) || daysCountNum < 1 || daysCountNum > 7) {
+      return res.status(400).json({ error: 'Invalid input: days must be a number between 1 and 7.' });
+    }
+
+    if (!Array.isArray(categories) || categories.length === 0) {
+      return res.status(400).json({ error: 'Invalid input: categories must be a non-empty array.' });
+    }
+
+    const validPaces = ['Relaxed', 'Fast'];
+    if (pace && !validPaces.includes(pace)) {
+      return res.status(400).json({ error: `Invalid input: pace must be one of ${validPaces.join(', ')}.` });
+    }
+
+    const validLanguages = ['English', 'Marathi', 'Hindi', 'Gujarati'];
+    if (userLanguage && !validLanguages.includes(userLanguage)) {
+      return res.status(400).json({ error: `Invalid input: userLanguage must be one of ${validLanguages.join(', ')}.` });
+    }
+    // --- End Validation ---
 
     const daysCount = Number(days) || 1;
     const selectedCategories = Array.isArray(categories) ? categories : ['Heritage'];
@@ -482,29 +572,11 @@ Do not include any conversational markdown tags or prefix/suffix. Just return th
         }
       }
 
-      // If we have stops, optimize order using OSRM Trip API (or simple distance sorting fallback)
+      // Create stops with a temporary order first
       if (dayStopsData.length > 0) {
-        let sortedStopsData = [...dayStopsData];
-
-        if (dayStopsData.length >= 2) {
-          try {
-            const coordsStr = dayStopsData.map(s => `${s.place.longitude},${s.place.latitude}`).join(';');
-            const url = `https://router.project-osrm.org/trip/v1/driving/${coordsStr}?source=first&destination=any&roundtrip=false`;
-            const response = await axios.get(url);
-            if (response.data?.code === 'Ok' && response.data?.waypoints) {
-              const sortedWaypoints = [...response.data.waypoints].sort((a: any, b: any) => a.trips_index - b.trips_index);
-              sortedStopsData = sortedWaypoints.map((wp: any) => dayStopsData[wp.waypoint_index]);
-            }
-          } catch (osrmError) {
-            console.error("OSRM Trip Optimization failed for generated day:", osrmError);
-          }
-        }
-
-        // Save stops to DB
-        for (let i = 0; i < sortedStopsData.length; i++) {
-          const item = sortedStopsData[i];
+        for (let i = 0; i < dayStopsData.length; i++) {
+          const item = dayStopsData[i];
           const timeLabel = `${9 + i * 2}:00 ${9 + i * 2 >= 12 ? 'PM' : 'AM'}`;
-          
           await prisma.itineraryStop.create({
             data: {
               itineraryDayId: itDay.id,
@@ -514,7 +586,7 @@ Do not include any conversational markdown tags or prefix/suffix. Just return th
               desc: item.place.description,
               desc_mr: item.place.description_mr,
               dotColor: getCategoryColor(item.place.category),
-              order: i,
+              order: i, // Temporary order
               tags: [
                 { label: item.place.category, type: item.place.category.toLowerCase() },
                 { label: "AI Recommended", type: "ai", reason: item.aiReason }
@@ -522,6 +594,9 @@ Do not include any conversational markdown tags or prefix/suffix. Just return th
             }
           });
         }
+
+        // Now, re-optimize the newly created stops using the shared helper
+        await reorderStopsWithOSRM(itDay.id, 'driving');
       }
 
       // Retrieve full created day details to return
@@ -535,6 +610,9 @@ Do not include any conversational markdown tags or prefix/suffix. Just return th
       });
       createdItinerary.push(finalDay);
     }
+
+    // Invalidate cache as the entire itinerary was replaced
+    await invalidateCache(`itinerary:${userId}`);
 
     res.json(createdItinerary);
   } catch (error) {
@@ -669,48 +747,8 @@ export const adaptWeather = async (req: AuthRequest, res: Response) => {
     }
 
     if (swappedCount > 0) {
-      const updatedStops = await prisma.itineraryStop.findMany({
-        where: { itineraryDayId: Number(itineraryDayId) }
-      });
-
-      const places = await prisma.place.findMany({
-        where: {
-          name: {
-            in: updatedStops.map(s => s.name),
-            mode: 'insensitive'
-          }
-        }
-      });
-
-      const stopsWithCoords = updatedStops.map(stop => {
-        const matchedPlace = places.find(p => p.name.toLowerCase() === stop.name.toLowerCase());
-        return {
-          stop,
-          lat: matchedPlace?.latitude,
-          lng: matchedPlace?.longitude
-        };
-      }).filter(s => s.lat !== null && s.lng !== null && s.lat !== undefined && s.lng !== undefined);
-
-      if (stopsWithCoords.length >= 2) {
-        try {
-          const coordsStr = stopsWithCoords.map(s => `${s.lng},${s.lat}`).join(';');
-          const url = `https://router.project-osrm.org/trip/v1/driving/${coordsStr}?source=first&destination=any&roundtrip=false`;
-          const response = await axios.get(url);
-          if (response.data?.code === 'Ok' && response.data?.waypoints) {
-            const sortedWaypoints = [...response.data.waypoints].sort((a: any, b: any) => a.trips_index - b.trips_index);
-            for (let i = 0; i < sortedWaypoints.length; i++) {
-              const wp = sortedWaypoints[i];
-              const stopItem = stopsWithCoords[wp.waypoint_index];
-              await prisma.itineraryStop.update({
-                where: { id: stopItem.stop.id },
-                data: { order: i }
-              });
-            }
-          }
-        } catch (osrmError) {
-          console.error("OSRM Trip Optimization failed during weather adaptation:", osrmError);
-        }
-      }
+      // Re-optimize the route with the new stops, using the shared helper
+      await reorderStopsWithOSRM(Number(itineraryDayId), 'driving');
     }
 
     const finalDay = await prisma.itineraryDay.findUnique({
@@ -721,6 +759,9 @@ export const adaptWeather = async (req: AuthRequest, res: Response) => {
         }
       }
     });
+
+    // Invalidate cache
+    await invalidateCache(`itinerary:${userId}`);
 
     res.json({
       success: true,
@@ -734,6 +775,47 @@ export const adaptWeather = async (req: AuthRequest, res: Response) => {
   }
 };
 
+export const shareItinerary = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const userId = req.user.id;
+
+    const itineraryDays = await prisma.itineraryDay.findMany({
+      where: { userId },
+      include: {
+        stops: {
+          orderBy: { order: 'asc' }
+        }
+      },
+      orderBy: { day: 'asc' }
+    });
+
+    if (itineraryDays.length === 0) {
+      return res.status(404).json({ error: 'No itinerary found to share.' });
+    }
+
+    let shareText = "Check out my Pune trip plan!\n\n";
+
+    for (const day of itineraryDays) {
+      shareText += `*${day.label}*\n`;
+      if (day.stops.length > 0) {
+        for (const stop of day.stops) {
+          shareText += `- ${stop.time}: ${stop.name}\n`;
+        }
+      } else {
+        shareText += "- No plans for this day.\n";
+      }
+      shareText += "\n";
+    }
+    res.json({ shareText });
+  } catch (error) {
+    console.error("Failed to generate share text for itinerary:", error);
+    res.status(500).json({ error: 'Failed to share itinerary' });
+  }
+};
+
 const getCategoryColor = (category: string) => {
   switch (category) {
     case "Heritage": return "#8B3A2A";
@@ -744,4 +826,3 @@ const getCategoryColor = (category: string) => {
     default: return "#6B5B52";
   }
 };
-

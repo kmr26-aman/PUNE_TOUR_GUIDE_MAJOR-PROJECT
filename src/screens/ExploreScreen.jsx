@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo } from "react";
+import { Home } from "lucide-react";
 import StatusBar from "../components/StatusBar";
 import PlaceListItem from "../components/PlaceListItem";
 import { categories } from "../data/puneData";
 import { fetchPlaces } from "../data/api";
 import { translations } from "../data/translations";
 
-export default function ExploreScreen({ onPlaceSelect, initialParams = {}, userLocation, userLanguage }) {
+export default function ExploreScreen({ onPlaceSelect, initialParams = {}, userLocation, userLanguage, onNavigateHome }) {
   const [activeFilter, setActiveFilter] = useState("All");
   const [search, setSearch] = useState("");
   const [places, setPlaces] = useState([]);
@@ -58,11 +59,11 @@ export default function ExploreScreen({ onPlaceSelect, initialParams = {}, userL
 
   const filteredAndSortedPlaces = useMemo(() => {
     return [...places]
-      .filter(p => {
-        if (onlyAccessible && !p.accessible) return false;
-        if (onlyTopRated && p.rating < 4.5) return false;
-        if (priceFilter === "Free" && p.entryFee !== "Free" && p.entryFee !== "—") return false;
-        if (priceFilter === "Paid" && (p.entryFee === "Free" || p.entryFee === "—")) return false;
+      .filter((place) => {
+        if (onlyAccessible && !place.accessible) return false;
+        if (onlyTopRated && place.rating < 4.5) return false;
+        if (priceFilter === "Free" && place.entryFee !== "Free" && place.entryFee !== "—") return false;
+        if (priceFilter === "Paid" && (place.entryFee === "Free" || place.entryFee === "—")) return false;
         return true;
       })
       .sort((a, b) => {
@@ -74,8 +75,9 @@ export default function ExploreScreen({ onPlaceSelect, initialParams = {}, userL
 
   if (loading && places.length === 0) {
     return (
-      <div style={{ background: "#FBF8F3", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ color: "#8B3A2A", fontWeight: 600 }}>{t.searching}</div>
+      <div style={{ background: "#FBF8F3", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+        <StatusBar />
+        <div style={{ color: "#8B3A2A", fontWeight: 600, fontSize: 13 }}>{t.searching}</div>
       </div>
     );
   }
@@ -88,8 +90,32 @@ export default function ExploreScreen({ onPlaceSelect, initialParams = {}, userL
         
         {/* Header */}
         <div style={{ padding: "10px 16px 14px" }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: "#1C1412", marginBottom: 10 }}>
-            {t.exploreTitle}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+            {onNavigateHome && (
+              <button
+                onClick={onNavigateHome}
+                title={t.home || "Home"}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 36,
+                  height: 36,
+                  borderRadius: 10,
+                  background: "#8B3A2A",
+                  color: "#fff",
+                  border: "none",
+                  cursor: "pointer",
+                  boxShadow: "0 2px 6px rgba(139,58,42,0.2)",
+                  transition: "all 0.2s"
+                }}
+              >
+                <Home size={18} />
+              </button>
+            )}
+            <div style={{ fontSize: 18, fontWeight: 700, color: "#1C1412", flex: 1, textAlign: onNavigateHome ? "right" : "left" }}>
+              {t.exploreTitle}
+            </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div

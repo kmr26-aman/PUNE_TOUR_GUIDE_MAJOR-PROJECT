@@ -94,7 +94,30 @@ export const translations = {
     temple: "Temple",
     nature: "Nature",
     food: "Food",
-    wellness: "Wellness"
+    wellness: "Wellness",
+    socialMedia: {
+      title: "Community",
+      loading: "Loading community feed...",
+      refreshing: "Refreshing feed...",
+      noPosts: "No posts yet. Be the first to share a moment from Pune.",
+      noMorePosts: "You've reached the end.",
+      createPostTitle: "Create Post",
+      postButton: "Post",
+      newPostPlaceholder: "Share your Pune moment...",
+      addCommentPlaceholder: "Add a comment...",
+      likes: "likes",
+      comments: "comments",
+      follow: "Follow",
+      unfollow: "Following",
+      fetchError: "Unable to load the feed right now.",
+      likeError: "Couldn't update the like.",
+      commentError: "Couldn't add your comment.",
+      followError: "Couldn't update the follow state.",
+      emptyPostError: "Write something before posting.",
+      postSuccess: "Post created successfully!",
+      postError: "Couldn't create the post.",
+      refreshError: "Couldn't refresh the feed."
+    }
   },
   Marathi: {
     // Nav
@@ -191,7 +214,30 @@ export const translations = {
     temple: "मंदिर",
     nature: "निसर्ग",
     food: "खाद्यपदार्थ",
-    wellness: "आरोग्य"
+    wellness: "आरोग्य",
+    socialMedia: {
+      title: "कम्युनिटी",
+      loading: "कम्युनिटी फीड लोड होत आहे...",
+      refreshing: "फीड ताजे होत आहे...",
+      noPosts: "अद्याप कोणतेही पोस्ट नाहीत. पहिल्यांदा पुण्याचा अनुभव शेअर करा.",
+      noMorePosts: "तुम्ही शेवटपर्यंत पोहोचलात.",
+      createPostTitle: "पोस्ट तयार करा",
+      postButton: "पोस्ट करा",
+      newPostPlaceholder: "तुमचा पुण्याचा अनुभव शेअर करा...",
+      addCommentPlaceholder: "टिप्पणी जोडा...",
+      likes: "लाइक",
+      comments: "टिप्पणी",
+      follow: "फॉलो",
+      unfollow: "फॉलोइंग",
+      fetchError: "फीड लोड करण्यात अडचण आली.",
+      likeError: "लाइक अपडेट करता आले नाही.",
+      commentError: "टिप्पणी जोडता आली नाही.",
+      followError: "फॉलो स्थिती अपडेट करता आली नाही.",
+      emptyPostError: "पोस्ट करण्यापूर्वी काहीतरी लिहा.",
+      postSuccess: "पोस्ट यशस्वीरित्या तयार झाला!",
+      postError: "पोस्ट तयार करता आला नाही.",
+      refreshError: "फीड रिफ्रेश करता आला नाही."
+    }
   },
   Hindi: {
     // Nav
@@ -288,7 +334,30 @@ export const translations = {
     temple: "मंदिर",
     nature: "प्रकृति",
     food: "भोजन",
-    wellness: "कल्याण"
+    wellness: "कल्याण",
+    socialMedia: {
+      title: "सामुदाय",
+      loading: "कम्युनिटी फीड लोड हो रहा है...",
+      refreshing: "फीड रिफ्रेश हो रही है...",
+      noPosts: "अभी तक कोई पोस्ट नहीं है। पुणे का पहला अनुभव साझा करें।",
+      noMorePosts: "आप खत्म हो चुके हैं।",
+      createPostTitle: "पोस्ट बनाएं",
+      postButton: "पोस्ट करें",
+      newPostPlaceholder: "अपने पुणे का अनुभव साझा करें...",
+      addCommentPlaceholder: "टिप्पणी जोड़ें...",
+      likes: "लाइक",
+      comments: "कमेंट",
+      follow: "फॉलो",
+      unfollow: "फॉलोइंग",
+      fetchError: "फीड लोड नहीं हो पाया।",
+      likeError: "लाइक अपडेट नहीं हो पाया।",
+      commentError: "कमेंट जोड़ना संभव नहीं हुआ।",
+      followError: "फॉलो स्थिति अपडेट नहीं हो पाई।",
+      emptyPostError: "पोस्ट करने से पहले कुछ लिखें।",
+      postSuccess: "पोस्ट सफलतापूर्वक बनाया गया!",
+      postError: "पोस्ट बनाने में समस्या हुई।",
+      refreshError: "फीड रिफ्रेश नहीं हो पाया।"
+    }
   },
   Gujarati: {
     // Nav
@@ -385,6 +454,29 @@ export const translations = {
     temple: "મંદિર",
     nature: "કુદરત",
     food: "ખોરાક",
-    wellness: "કલ્યાણ"
+    wellness: "કલ્યાણ",
+    socialMedia: {
+      title: "કમ્યુનિટી",
+      loading: "કમ્યુનિટી ફીડ લોડ થઈ રહી છે...",
+      refreshing: "ફીડ રિફ્રેશ થઈ રહી છે...",
+      noPosts: "હજુ સુધી કોઈ પોસ્ટ નથી. Puneનો પહેલો અનુભવ શેર કરો.",
+      noMorePosts: "તમે અંત સુધી પહોંચી ગયા છો.",
+      createPostTitle: "પોસ્ટ બનાવો",
+      postButton: "પોસ્ટ કરો",
+      newPostPlaceholder: "તમારો પુનાનો અનુભવ શેર કરો...",
+      addCommentPlaceholder: "ટિપ્પણી ઉમેરો...",
+      likes: "લાઇક્સ",
+      comments: "કોમેન્ટ્સ",
+      follow: "ફોલો",
+      unfollow: "ફોલોઇંગ",
+      fetchError: "ફીડ લોડ થઈ શકી નથી.",
+      likeError: "લાઇક અપડેટ થઈ શક્યું નથી.",
+      commentError: "કોમેન્ટ ઉમેરવી શક્ય ન થઈ.",
+      followError: "ફોલો સ્થિતિ અપડેટ થઈ શકી નથી.",
+      emptyPostError: "પોસ્ટ કરતાં પહેલા કંઈ લખો.",
+      postSuccess: "પોસ્ટ સફળતાપૂર્વક બનાવાઈ!",
+      postError: "પોસ્ટ બનાવવામાં સમસ્યા આવી.",
+      refreshError: "ફીડ રિફ્રેશ થઈ શકી નથી."
+    }
   },
 };

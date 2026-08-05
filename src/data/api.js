@@ -1,8 +1,8 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
 
-// ── Client-Side In-Memory Cache ───────────────────────────
+// Client-side in-memory cache
 const apiCache = new Map();
-const CACHE_TTL_MS = 45 * 1000; // 45 seconds TTL
+const CACHE_TTL_MS = 45 * 1000;
 
 const getCached = (key) => {
   const item = apiCache.get(key);
@@ -31,13 +31,13 @@ export const clearApiCache = (prefix = '') => {
 };
 
 const getHeaders = (extraHeaders = {}) => {
-  const token = localStorage.getItem('pune_auth_token');
+  const authKey = localStorage.getItem('pune_auth_token');
   const headers = {
     'Content-Type': 'application/json',
     ...extraHeaders
   };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+  if (authKey) {
+    headers['Authorization'] = 'Bearer ' + authKey;
   }
   return headers;
 };
@@ -49,12 +49,12 @@ export const loginUser = async (email, password) => {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password })
   });
-  
+
   if (!response.ok) {
     const errorData = await response.json();
     throw new Error(errorData.error || 'Login failed');
   }
-  
+
   const data = await response.json();
   if (data.token) {
     localStorage.setItem('pune_auth_token', data.token);
@@ -70,17 +70,54 @@ export const registerUser = async (name, email, password) => {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, email, password })
   });
-  
+
   if (!response.ok) {
     const errorData = await response.json();
     throw new Error(errorData.error || 'Registration failed');
   }
-  
+
   const data = await response.json();
   if (data.token) {
     localStorage.setItem('pune_auth_token', data.token);
     localStorage.setItem('pune_user_name', data.user.name);
   }
+  return data;
+};
+
+export const googleAuthUser = async (googleData) => {
+  clearApiCache();
+  const response = await fetch(`${API_BASE_URL}/user/google-auth`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(googleData)
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || 'Google authentication failed');
+  }
+
+  const data = await response.json();
+  if (data.token) {
+    localStorage.setItem('pune_auth_token', data.token);
+    localStorage.setItem('pune_user_name', data.user.name);
+    if (data.user.avatarUrl) {
+      localStorage.setItem('pune_user_avatar', data.user.avatarUrl);
+    }
+  }
+  return data;
+};
+
+export const fetchUserMe = async () => {
+  const response = await fetch(`${API_BASE_URL}/user/me`, {
+    headers: getHeaders(),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to fetch user profile');
+  }
+  const data = await response.json();
+  if (data.name) localStorage.setItem('pune_user_name', data.name);
+  if (data.avatarUrl) localStorage.setItem('pune_user_avatar', data.avatarUrl);
   return data;
 };
 
@@ -98,7 +135,7 @@ export const fetchPlaces = async (params = {}) => {
   if (params.q) query.append('q', params.q);
   if (params.isSaved) query.append('isSaved', 'true');
   if (params.isDiscovered) query.append('isDiscovered', 'true');
-  
+
   const url = `${API_BASE_URL}/places?${query.toString()}`;
   const cached = getCached(url);
   if (cached) return cached;
@@ -145,11 +182,11 @@ export const updateStopStatus = async (id, done) => {
   return response.json();
 };
 
-export const addStopToItinerary = async (stopData) => {
+export const addStopToItinerary = async (itineraryDayId, placeId) => {
   const response = await fetch(`${API_BASE_URL}/itinerary/stops`, {
     method: 'POST',
     headers: getHeaders(),
-    body: JSON.stringify(stopData)
+    body: JSON.stringify({ itineraryDayId, placeId })
   });
   if (!response.ok) throw new Error('Failed to add stop');
   clearApiCache('http');
@@ -223,16 +260,6 @@ export const fetchWeather = async () => {
   return data;
 };
 
-export const toggleWeather = async () => {
-  const response = await fetch(`${API_BASE_URL}/weather/toggle`, {
-    method: 'POST',
-    headers: getHeaders()
-  });
-  if (!response.ok) throw new Error('Failed to toggle weather status');
-  clearApiCache('http');
-  return response.json();
-};
-
 export const adaptItineraryForWeather = async (itineraryDayId, userLanguage) => {
   const response = await fetch(`${API_BASE_URL}/itinerary/adapt-weather`, {
     method: 'POST',
@@ -242,4 +269,161 @@ export const adaptItineraryForWeather = async (itineraryDayId, userLanguage) => 
   if (!response.ok) throw new Error('Failed to adapt itinerary for weather');
   clearApiCache('http');
   return response.json();
+};
+
+export const shareItinerary = async (itineraryId) => {
+  const response = await fetch(`${API_BASE_URL}/itinerary/share`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify({ itineraryId })
+  });
+  if (!response.ok) throw new Error('Failed to share itinerary');
+  return response.json();
+};
+
+export const uploadImage = async (file) => {
+  try {
+    const formData = new FormData();
+    formData.append('image', file);
+
+    const token = localStorage.getItem('pune_auth_token');
+    const headers = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(`${API_BASE_URL}/upload`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error('Image upload failed');
+    }
+
+    const data = await response.json();
+    const serverHost = API_BASE_URL.replace(/\/api$/, '');
+    return data.imageUrl.startsWith('http') ? data.imageUrl : `${serverHost}${data.imageUrl}`;
+  } catch (err) {
+    console.warn('Backend image upload fallback triggered:', err.message);
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+};
+
+export const createPost = async (caption, imageUrl) => {
+  const response = await fetch(`${API_BASE_URL}/social/posts`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify({ caption, imageUrl }),
+  });
+  if (!response.ok) throw new Error('Failed to create post');
+  clearApiCache('social:feed');
+  return response.json();
+};
+
+export const getSocialFeed = async (page = 1, limit = 10) => {
+  const cacheKey = `social:feed:${page}:${limit}`;
+  const cached = getCached(cacheKey);
+  if (cached) return cached;
+
+  const query = new URLSearchParams({ page: page.toString(), limit: limit.toString() });
+  const response = await fetch(`${API_BASE_URL}/social/feed?${query.toString()}`, {
+    headers: getHeaders(),
+  });
+  if (!response.ok) throw new Error('Failed to fetch social feed');
+  const data = await response.json();
+  setCache(cacheKey, data);
+  return data;
+};
+
+export const addCommentToPost = async (postId, text) => {
+  const response = await fetch(`${API_BASE_URL}/social/posts/${postId}/comments`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify({ text }),
+  });
+  if (!response.ok) throw new Error('Failed to add comment');
+  clearApiCache('social:feed');
+  return response.json();
+};
+
+export const togglePostLike = async (postId) => {
+  const response = await fetch(`${API_BASE_URL}/social/posts/${postId}/like`, {
+    method: 'POST',
+    headers: getHeaders(),
+  });
+  if (!response.ok) throw new Error('Failed to toggle like');
+  clearApiCache('social:feed');
+  return response.json();
+};
+
+export const toggleFollowUser = async (userId) => {
+  const response = await fetch(`${API_BASE_URL}/social/users/${userId}/toggle-follow`, {
+    method: 'POST',
+    headers: getHeaders(),
+  });
+  if (!response.ok) throw new Error('Failed to toggle follow status');
+  return response.json();
+};
+
+export const fetchPostById = async (postId) => {
+  const cacheKey = `social:post:${postId}`;
+  const cached = getCached(cacheKey);
+  if (cached) return cached;
+
+  const response = await fetch(`${API_BASE_URL}/social/posts/${postId}`, {
+    headers: getHeaders(),
+  });
+  if (!response.ok) throw new Error('Failed to fetch post');
+  const data = await response.json();
+  setCache(cacheKey, data);
+  return data;
+};
+
+export const fetchUserProfile = async (userId) => {
+  const cacheKey = `user:profile:${userId}`;
+  const cached = getCached(cacheKey);
+  if (cached) return cached;
+
+  const response = await fetch(`${API_BASE_URL}/user/${userId}`, {
+    headers: getHeaders(),
+  });
+  if (!response.ok) throw new Error('Failed to fetch user profile');
+  const data = await response.json();
+  setCache(cacheKey, data);
+  return data;
+};
+
+export const getPopularPosts = async () => {
+  const cacheKey = 'social:posts:popular';
+  const cached = getCached(cacheKey);
+  if (cached) return cached;
+
+  const response = await fetch(`${API_BASE_URL}/social/posts/popular`, {
+    headers: getHeaders(),
+  });
+  if (!response.ok) throw new Error('Failed to fetch popular posts');
+  const data = await response.json();
+  setCache(cacheKey, data);
+  return data;
+};
+
+export const fetchUserActivity = async (userId) => {
+  const cacheKey = `user:activity:${userId}`;
+  const cached = getCached(cacheKey);
+  if (cached) return cached;
+
+  const response = await fetch(`${API_BASE_URL}/user/${userId}/activity`, {
+    headers: getHeaders(),
+  });
+  if (!response.ok) throw new Error('Failed to fetch user activity');
+  const data = await response.json();
+  setCache(cacheKey, data);
+  return data;
 };

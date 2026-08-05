@@ -29,3 +29,5 @@ export const authMiddleware = (req: AuthRequest, res: Response, next: NextFuncti
     next();
   }
 };
+
+export const authenticateToken = authMiddleware;

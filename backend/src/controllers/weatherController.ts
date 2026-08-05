@@ -56,33 +56,3 @@ export const getWeather = async (req: Request, res: Response) => {
     res.json({ weather: memoryWeather, temp: memoryTemp });
   }
 };
-
-export const toggleWeather = async (req: Request, res: Response) => {
-  try {
-    // Keep toggle endpoint active for debugging or developer purposes,
-    // allowing manual toggle of override status in cache.
-    const cacheKey = 'places:weather:live';
-    let currentWeather = memoryWeather;
-
-    const cached = await getCachedData<{ weather: string; temp: number }>(cacheKey);
-    if (cached) {
-      currentWeather = cached.weather;
-    }
-
-    const newWeather = currentWeather === 'Sunny' ? 'Rainy' : 'Sunny';
-    const newTemp = newWeather === 'Sunny' ? 30 : 22;
-
-    memoryWeather = newWeather;
-    memoryTemp = newTemp;
-
-    const weatherResult = { weather: newWeather, temp: newTemp };
-    await setCachedData(cacheKey, weatherResult, 900);
-
-    console.log(`[Weather] Toggled weather override to ${newWeather} (${newTemp}°C)`);
-    res.json(weatherResult);
-  } catch (error) {
-    console.error('Failed to toggle weather override:', error);
-    res.status(500).json({ error: 'Failed to toggle weather status' });
-  }
-};
-

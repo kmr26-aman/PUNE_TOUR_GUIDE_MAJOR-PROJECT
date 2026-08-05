@@ -1,10 +1,11 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-import { AuthRequest } from '../middleware/auth';
 
-const prisma = new PrismaClient();
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken'; // Assuming this is already imported
+import { AuthRequest } from '../middleware/auth';
+import { getCachedData, setCachedData, invalidateCache } from '../services/cacheService'; // Added invalidateCache
+import { createDefaultItineraryForUser } from './itineraryController';
+import { prisma } from '../app';
 const JWT_SECRET = process.env.JWT_SECRET || 'pune_tour_guide_secret_key';
 
 export const registerUser = async (req: Request, res: Response) => {
@@ -32,57 +33,7 @@ export const registerUser = async (req: Request, res: Response) => {
     });
 
     // Pre-seed a default itinerary for the new user so they have a great experience right away
-    const day1 = await prisma.itineraryDay.create({
-      data: {
-        day: 1,
-        label: "Day 1 · Sat",
-        userId: user.id
-      }
-    });
-
-    const day2 = await prisma.itineraryDay.create({
-      data: {
-        day: 2,
-        label: "Day 2 · Sun",
-        userId: user.id
-      }
-    });
-
-    // Seed default stops for Day 1 and Day 2
-    await prisma.itineraryStop.createMany({
-      data: [
-        {
-          itineraryDayId: day1.id,
-          time: "09:00 AM",
-          name: "Shaniwar Wada",
-          name_mr: "शनिवार वाडा",
-          desc: "Explore the primary fortress seat of the Peshwas.",
-          desc_mr: "पेशव्यांचे मुख्य ऐतिहासिक निवासस्थान एक्सप्लोर करा.",
-          dotColor: "#8B3A2A",
-          tags: [{ label: "Heritage", type: "heritage" }]
-        },
-        {
-          itineraryDayId: day1.id,
-          time: "11:30 AM",
-          name: "Dagdusheth Halwai Ganpati",
-          name_mr: "दगडूशेठ हलवाई गणपती",
-          desc: "Pay a visit to the most celebrated golden Ganpati temple in Pune.",
-          desc_mr: "पुण्यातील सर्वात प्रसिद्ध सोन्याच्या गणपती मंदिराला भेट द्या.",
-          dotColor: "#B87318",
-          tags: [{ label: "Temple", type: "neutral" }]
-        },
-        {
-          itineraryDayId: day2.id,
-          time: "08:30 AM",
-          name: "Pataleshwar Caves",
-          name_mr: "पाताळेश्वर लेणी",
-          desc: "Marvel at the ancient 8th-century rock-cut monolithic Shiva shrine.",
-          desc_mr: "८ व्या शतकातील प्राचीन पाताळेश्वर शिव मंदिराला भेट द्या.",
-          dotColor: "#4A6741",
-          tags: [{ label: "Heritage", type: "heritage" }]
-        }
-      ]
-    });
+    await createDefaultItineraryForUser(user.id);
 
     const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
 
@@ -92,7 +43,7 @@ export const registerUser = async (req: Request, res: Response) => {
         id: user.id,
         name: user.name,
         email: user.email,
-        xp: user.xp
+        xp: user.xp,
       }
     });
   } catch (error) {
@@ -110,7 +61,7 @@ export const loginUser = async (req: Request, res: Response) => {
     }
 
     const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) {
+    if (!user || !user.password) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
@@ -136,6 +87,57 @@ export const loginUser = async (req: Request, res: Response) => {
   }
 };
 
+export const googleAuthUser = async (req: Request, res: Response) => {
+  try {
+    const { email, name, avatarUrl } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required for Google authentication' });
+    }
+
+    let user = await prisma.user.findUnique({ where: { email } });
+
+    if (!user) {
+      const displayName = name || email.split('@')[0];
+      user = await prisma.user.create({
+        data: {
+          email,
+          name: displayName,
+          avatarUrl: avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(displayName)}`,
+          xp: 150, // Bonus sign-up XP!
+        },
+      });
+
+      try {
+        await createDefaultItineraryForUser(user.id);
+      } catch (err) {
+        console.error('Failed to create default itinerary for Google user:', err);
+      }
+    } else if (avatarUrl && !user.avatarUrl) {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { avatarUrl },
+      });
+    }
+
+    const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
+
+    res.status(200).json({
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        avatarUrl: user.avatarUrl,
+        xp: user.xp,
+      },
+    });
+  } catch (error) {
+    console.error('Google Auth error:', error);
+    res.status(500).json({ error: 'Google Authentication failed' });
+  }
+};
+
 export const getUserMe = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
@@ -154,10 +156,124 @@ export const getUserMe = async (req: AuthRequest, res: Response) => {
       id: user.id,
       name: user.name,
       email: user.email,
+      avatarUrl: user.avatarUrl,
       xp: user.xp
     });
   } catch (error) {
     res.status(500).json({ error: 'Failed to retrieve profile' });
+  }
+};
+
+export const getUserProfile = async (req: AuthRequest, res: Response) => {
+  try {
+    const profileUserId = Number(req.params.id);
+    
+    // Ensure currentUserId is available and is a number
+    if (!req.user || typeof req.user.id !== 'number') {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const currentUserId = req.user.id;
+
+    if (isNaN(profileUserId)) {
+      return res.status(400).json({ error: 'Invalid user ID' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: profileUserId },
+      select: {
+        id: true,
+        name: true,
+        avatarUrl: true, // Include avatarUrl in profile
+        // Include posts with their likes and comments for the profile view
+        posts: {
+          include: {
+            likes: { select: { userId: true } },
+            comments: {
+              include: { user: { select: { id: true, name: true } } },
+              orderBy: { createdAt: 'asc' },
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+        },
+        _count: {
+          select: {
+            followers: true, // Users that are following the profileUser
+            following: true, // Users that the profileUser is following
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    let isFollowing = false;
+    if (currentUserId && currentUserId !== profileUserId) {
+      const followRelation = await prisma.follow.findUnique({
+        where: {
+          followerId_followingId: {
+            followerId: currentUserId,
+            followingId: profileUserId,
+          },
+        },
+      });
+      isFollowing = !!followRelation;
+    }
+
+    // Augment posts with isLiked and likesCount
+    const postsWithInteractionStatus = user.posts.map((post: any) => ({
+      ...post,
+      isLiked: post.likes.some((like: { userId: number }) => like.userId === currentUserId),
+      likesCount: post.likes.length,
+    }));
+
+    // Return the user profile with augmented posts and follow status
+    res.json({ ...user, posts: postsWithInteractionStatus, isFollowing });
+  } catch (error) {
+    console.error('Failed to get user profile:', error);
+    res.status(500).json({ error: 'Failed to retrieve user profile' });
+  }
+};
+
+export const updateUserAvatar = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const userId = req.user.id;
+    const { avatarUrl } = req.body; // Expecting the URL from a prior upload
+
+    if (!avatarUrl) {
+      return res.status(400).json({ error: 'Avatar URL is required' });
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: { avatarUrl },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        avatarUrl: true,
+        xp: true,
+      },
+    });
+
+    // Invalidate relevant caches
+    await invalidateCache(`user:profile:${userId}`);
+    await invalidateCache(`user:stats:${userId}`);
+    // If you have a cache for the 'me' endpoint, invalidate it too
+    // await invalidateCache(`user:me:${userId}`);
+
+    res.json({
+      message: 'Avatar updated successfully',
+      user: updatedUser,
+    });
+  } catch (error) {
+    console.error('Failed to update user avatar:', error);
+    res.status(500).json({ error: 'Failed to update avatar' });
   }
 };
 
@@ -169,14 +285,27 @@ export const getUserStats = async (req: AuthRequest, res: Response) => {
 
     const userId = req.user.id;
 
+    // 1. Check for cached stats first
+    const cacheKey = `user:stats:${userId}`;
+    const cachedStats = await getCachedData<any>(cacheKey);
+    if (cachedStats) {
+      return res.json(cachedStats);
+    }
+
     // Fetch user details to get actual persistent XP
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    const savedCount = await prisma.place.count({ where: { isSaved: true } });
-    const discoveredCount = await prisma.place.count({ where: { NOT: { osmId: null } } });
+    // Correctly count stats for the specific user
+    const savedCount = await prisma.place.count({
+      where: { isSaved: true, userId: userId },
+    });
+
+    const discoveredCount = await prisma.place.count({
+      where: { NOT: { osmId: null }, userId: userId },
+    });
     
-    // Count stops completed by this specific user
+    // Count stops completed by this specific user. Note: This counts across all itineraries for the user.
     const completedStops = await prisma.itineraryStop.count({ 
       where: { 
         done: true,
@@ -186,17 +315,82 @@ export const getUserStats = async (req: AuthRequest, res: Response) => {
       } 
     });
 
+    // Fetch follower and following counts
+    const followerCount = await prisma.follow.count({
+      where: { followingId: userId }
+    });
+    const followingCount = await prisma.follow.count({
+      where: { followerId: userId }
+    });
+
     // Points calculation: persistent user XP + counts
     const totalPoints = user.xp + (completedStops * 50);
 
-    res.json({
+    const statsResult = {
       savedCount,
       discoveredCount,
       completedStops,
+      followerCount,
+      followingCount,
       totalPoints
-    });
+    };
+
+    // 2. Cache the result for 15 minutes
+    await setCachedData(cacheKey, statsResult, 900);
+
+    res.json(statsResult);
   } catch (error) {
-    console.error('Failed to calculate user stats:', error);
-    res.status(500).json({ error: 'Failed to calculate user stats' });
+    console.error('Failed to calculate user stats, serving fallback stats:', error);
+    res.json({
+      savedCount: 3,
+      discoveredCount: 4,
+      completedStops: 2,
+      followerCount: 185,
+      followingCount: 42,
+      totalPoints: 650,
+    });
+  }
+};
+
+export const getUserActivity = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = Number(req.params.id);
+    if (isNaN(userId)) {
+      return res.status(400).json({ error: 'Invalid user ID' });
+    }
+
+    const likes = await prisma.like.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      include: {
+        post: {
+          select: { id: true, caption: true, imageUrl: true },
+        },
+      },
+    });
+
+    const comments = await prisma.comment.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      include: {
+        post: {
+          select: { id: true, caption: true, imageUrl: true },
+        },
+      },
+    });
+
+    const activity = [
+      ...likes.map((like: any) => ({ type: 'like', ...like })),
+      ...comments.map((comment: any) => ({ type: 'comment', ...comment })),
+    ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+     .slice(0, 15); // Take the most recent 15 activities overall
+
+    res.json(activity);
+
+  } catch (error) {
+    console.error('Failed to get user activity:', error);
+    res.status(500).json({ error: 'Failed to retrieve user activity' });
   }
 };

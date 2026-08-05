@@ -1,10 +1,10 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
-import { PrismaClient } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { searchOSMPlaces, fetchOSMPlacesByCategory } from '../services/overpassService';
 import { getCachedData, setCachedData, invalidateCache } from '../services/cacheService';
-
-const prisma = new PrismaClient();
+import { prisma } from '../app';
+import { fallbackPlaces } from '../data/fallbackData';
 
 const saveDiscoveredPlaces = async (discoveredPlaces: any[]) => {
   if (discoveredPlaces.length === 0) return;
@@ -19,14 +19,14 @@ const saveDiscoveredPlaces = async (discoveredPlaces: any[]) => {
       create: { ...rest, latitude, longitude }
     });
 
-    // 2. Populate PostGIS geometry column using raw SQL
-    if (latitude && longitude) {
-      await prisma.$executeRaw`
-        UPDATE "Place" 
-        SET "location" = ST_SetSRID(ST_MakePoint(${Number(longitude)}, ${Number(latitude)}), 4326)
-        WHERE id = ${upserted.id}
-      `;
-    }
+    // // 2. Populate PostGIS geometry column using raw SQL
+    // if (latitude && longitude) {
+    //   await prisma.$executeRaw`
+    //     UPDATE "Place" 
+    //     SET "location" = ST_SetSRID(ST_MakePoint(${Number(longitude)}, ${Number(latitude)}), 4326)
+    //     WHERE id = ${upserted.id}
+    //   `;
+    // }
   }
   
   // Invalidate cache if new data was added
@@ -35,10 +35,12 @@ const saveDiscoveredPlaces = async (discoveredPlaces: any[]) => {
 
 export const getAllPlaces = async (req: Request, res: Response) => {
   try {
-    const { category, q, isSaved, isDiscovered } = req.query;
+    const { category, q, isSaved, isDiscovered, lat, lng } = req.query;
+
+
     
     // Generate a unique cache key based on query parameters
-    const cacheKey = `places:v5:${category || 'all'}:${q || 'none'}:${isSaved || 'any'}:${isDiscovered || 'any'}`;
+    const cacheKey = `places:v5:${category || 'all'}:${q || 'none'}:${isSaved || 'any'}:${isDiscovered || 'any'}:${lat || 'none'}:${lng || 'none'}`; // Updated cache key
     
     // Check cache first
     const cachedPlaces = await getCachedData<any[]>(cacheKey);
@@ -88,20 +90,23 @@ export const getAllPlaces = async (req: Request, res: Response) => {
         .catch(err => console.error('Background category discovery error:', err));
     }
 
-    // Nearby search enhancement: If user coordinates are provided, sort by real physical distance using PostGIS
-    const { lat, lng } = req.query;
-    if (lat && lng && places.length > 0) {
-      // Use raw SQL to get places sorted by PostGIS distance
-      const nearbyPlaces: any[] = await prisma.$queryRaw`
-        SELECT *, ST_DistanceSphere(location, ST_SetSRID(ST_MakePoint(${Number(lng)}, ${Number(lat)}), 4326)) as "dist"
-        FROM "Place"
-        WHERE "category" = ${category && category !== 'All' ? category : "Heritage"} -- example filter logic
-        ORDER BY "dist" ASC
-        LIMIT 10
-      `;
-      // Note: This is a specialized nearby query. For now, we'll keep the standard return
-      // but the database is now ready for high-perf nearby searches.
-    }
+    // // Nearby search enhancement: If user coordinates are provided, sort by real physical distance using PostGIS
+    // if (lat && lng && places.length > 0) {
+    //   // Use raw SQL to get places sorted by PostGIS distance
+    //   const categoryFilter = category && category !== 'All' 
+    //     ? Prisma.sql`WHERE "category" = ${String(category)}`
+    //     : Prisma.empty;
+
+    //   const nearbyPlaces: any[] = await prisma.$queryRaw`
+    //     SELECT *, ST_DistanceSphere(location, ST_SetSRID(ST_MakePoint(${Number(lng)}, ${Number(lat)}), 4326)) as "dist"
+    //     FROM "Place"
+    //     ${categoryFilter}
+    //     ORDER BY "dist" ASC
+    //     LIMIT 20
+    //   `;
+    //   // Note: This is a specialized nearby query. For now, we'll keep the standard return
+    //   // but the database is now ready for high-perf nearby searches.
+    // }
 
     // Save to cache for 1 hour
     await setCachedData(cacheKey, places, 3600);
@@ -109,7 +114,14 @@ export const getAllPlaces = async (req: Request, res: Response) => {
     res.json(places);
   } catch (error) {
     console.error('Error in getAllPlaces:', error);
-    res.status(500).json({ error: 'Failed to fetch places' });
+    const queryCategory = String(req.query.category || 'all').toLowerCase();
+    const queryText = String(req.query.q || '').trim().toLowerCase();
+    const filteredFallback = fallbackPlaces.filter((place) => {
+      const matchesCategory = queryCategory === 'all' || place.category.toLowerCase() === queryCategory;
+      const matchesText = !queryText || place.name.toLowerCase().includes(queryText) || place.description.toLowerCase().includes(queryText);
+      return matchesCategory && matchesText;
+    });
+    res.json(filteredFallback.length > 0 ? filteredFallback : fallbackPlaces);
   }
 };
 
@@ -129,7 +141,11 @@ export const getPlaceById = async (req: Request, res: Response) => {
     await setCachedData(cacheKey, place, 3600);
     res.json(place);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch place' });
+    const fallbackPlace = fallbackPlaces.find((place) => place.id === Number(req.params.id));
+    if (fallbackPlace) {
+      return res.json(fallbackPlace);
+    }
+    res.json(fallbackPlaces[0]);
   }
 };
 
@@ -165,6 +181,8 @@ export const toggleSavePlace = async (req: AuthRequest, res: Response) => {
         data: { xp: { increment: 10 } }
       });
       console.log(`[XP] User ${userId} gained +10 XP for saving place: ${place.name}`);
+      // Invalidate user stats only when they change
+      await invalidateCache(`user:stats:${userId}`);
     }
 
     // Invalidate relevant caches

@@ -1,12 +1,16 @@
 import { Router } from 'express';
-import { getUserStats, registerUser, loginUser, getUserMe } from '../controllers/userController';
+import { getUserStats, registerUser, loginUser, googleAuthUser, getUserMe, getUserProfile, getUserActivity, updateUserAvatar } from '../controllers/userController';
 import { authMiddleware } from '../middleware/auth';
 
 const router = Router();
 
 router.post('/register', registerUser);
 router.post('/login', loginUser);
+router.post('/google-auth', googleAuthUser);
 router.get('/me', authMiddleware, getUserMe);
+router.put('/avatar', authMiddleware, updateUserAvatar);
 router.get('/stats', authMiddleware, getUserStats);
+router.get('/:id/activity', authMiddleware, getUserActivity);
+router.get('/:id', authMiddleware, getUserProfile);
 
 export default router;

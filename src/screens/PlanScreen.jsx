@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Home } from "lucide-react";
 import StatusBar from "../components/StatusBar";
 import { tagStyles, colors } from "../data/tokens";
 import { fetchItinerary, deleteStopFromItinerary, fetchPlaces, addStopToItinerary, optimizeItinerary, generateItinerary, adaptItineraryForWeather } from "../data/api";
@@ -134,7 +135,7 @@ const parseVisitTime = (time) => {
   return 1; // default fallback 1 hour
 };
 
-export default function PlanScreen({ userLocation, userLanguage, weatherData, onWeatherToggle }) {
+export default function PlanScreen({ userLocation, userLanguage, weatherData, onWeatherToggle, onPlaceSelect, onNavigateHome }) {
   const [activeDay, setActiveDay] = useState(0);
   const [itineraryDays, setItineraryDays] = useState([]);
   const [places, setPlaces] = useState([]);
@@ -482,6 +483,30 @@ export default function PlanScreen({ userLocation, userLanguage, weatherData, on
       >
         <div style={{ position: "relative", zIndex: 1, display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
           <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+              {onNavigateHome && (
+                <button
+                  onClick={onNavigateHome}
+                  title={t.home || "Home"}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: 34,
+                    height: 34,
+                    borderRadius: 9,
+                    background: "rgba(255,255,255,0.2)",
+                    color: "#fff",
+                    border: "1px solid rgba(255,255,255,0.3)",
+                    cursor: "pointer",
+                    backdropFilter: "blur(4px)",
+                    transition: "all 0.2s"
+                  }}
+                >
+                  <Home size={18} />
+                </button>
+              )}
+            </div>
             <div style={{ fontSize: 16, fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", gap: 8 }}>
               <span>{t.myPlan}</span>
               <span
@@ -734,6 +759,29 @@ export default function PlanScreen({ userLocation, userLanguage, weatherData, on
                 </div>
                 <div style={{ fontSize: 11, color: "#6B5B52", marginTop: 4, lineHeight: 1.5 }}>
                   {userLanguage === "Marathi" && stop.desc_mr ? stop.desc_mr : stop.desc}
+                </div>
+                <div style={{ marginTop: 6 }}>
+                  <button
+                    onClick={() => {
+                      const query = encodeURIComponent(`${stop.name}, Pune`);
+                      window.location.href = `https://www.google.com/maps/dir/?api=1&destination=${query}`;
+                    }}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      padding: "3px 8px",
+                      borderRadius: 8,
+                      background: "#F2EAE7",
+                      color: "#8B3A2A",
+                      fontSize: 10,
+                      fontWeight: 700,
+                      border: "none",
+                      cursor: "pointer"
+                    }}
+                  >
+                    🧭 {userLanguage === "Marathi" ? "दिशा" : "Directions"}
+                  </button>
                 </div>
                 <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
                   {Array.isArray(stop.tags) && stop.tags.map((tag, idx) => {

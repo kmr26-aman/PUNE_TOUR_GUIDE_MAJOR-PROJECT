@@ -1,15 +1,17 @@
+/// This is your Prisma schema file,
+/// learn more about it in the docs: https://pris.ly/d/prisma-schema
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 model Place {
   id          Int      @id @default(autoincrement())
   name        String
+  userId      Int?
   name_mr     String?
   emoji       String
   category    String
@@ -34,7 +36,7 @@ model Place {
   osmId       String?  @unique
   latitude    Float?
   longitude   Float?
-  location    Unsupported("geometry(Point, 4326)")?
+  // location    Unsupported("geometry(Point, 4326)")? // Removed to avoid PostGIS dependency for now
 }
 
 model Event {
@@ -50,11 +52,17 @@ model User {
   id            Int            @id @default(autoincrement())
   name          String
   email         String         @unique
-  password      String
+  password      String?
+  avatarUrl     String?
   xp            Int            @default(0)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   itineraryDays ItineraryDay[]
+  posts         Post[]
+  likes         Like[]
+  comments      Comment[]
+  followers     Follow[]       @relation("following")
+  following     Follow[]       @relation("follower")
 }
 
 model ItineraryDay {
@@ -79,4 +87,47 @@ model ItineraryStop {
   done           Boolean      @default(false)
   order          Int          @default(0)
   itineraryDay   ItineraryDay @relation(fields: [itineraryDayId], references: [id], onDelete: Cascade)
+}
+
+model Post {
+  id        Int       @id @default(autoincrement())
+  caption   String?
+  imageUrl  String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  authorId  Int
+  author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  likes     Like[]
+  comments  Comment[]
+}
+
+model Like {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+  userId    Int
+  postId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+}
+
+model Comment {
+  id        Int      @id @default(autoincrement())
+  text      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  userId    Int
+  postId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+}
+
+model Follow {
+  followerId  Int
+  followingId Int
+  follower    User @relation("follower", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User @relation("following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, followingId])
 }

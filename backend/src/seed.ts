@@ -1,7 +1,9 @@
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
 
-const prisma = new PrismaClient();
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
+const prisma = new PrismaClient({ adapter });
 
 const places = [
   // ── HERITAGE (10) ──────────────────────────────────────────
@@ -216,6 +218,20 @@ const events = [
 
 async function main() {
   console.log('Start seeding...');
+
+  // Ensure guest user exists (id: 1) for guest fallback operations
+  const guestUser = await prisma.user.upsert({
+    where: { email: 'guest@punetourguide.com' },
+    update: {},
+    create: {
+      id: 1,
+      email: 'guest@punetourguide.com',
+      name: 'Guest Explorer',
+      xp: 100,
+      avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
+    },
+  });
+  console.log(`Guest user established with id: ${guestUser.id}`);
 
   // Clear existing data
   await prisma.itineraryStop.deleteMany();

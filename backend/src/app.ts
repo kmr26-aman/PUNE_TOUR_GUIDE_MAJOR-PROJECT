@@ -1,7 +1,10 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
+import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
 import helmet from 'helmet';
 import compression from 'compression';
+import multer from 'multer';
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
@@ -10,10 +13,33 @@ import eventRoutes from './routes/eventRoutes';
 import itineraryRoutes from './routes/itineraryRoutes';
 import userRoutes from './routes/userRoutes';
 import weatherRoutes from './routes/weatherRoutes';
+import socialRoutes from './routes/socialMediaRoutes';
 
 dotenv.config();
 
 const app = express();
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
+export const prisma = new PrismaClient({ adapter, log: ['error', 'warn'] });
+
+// Configure Multer for file uploads
+const upload = multer({ dest: 'uploads/' }); // Files will be stored in the 'uploads/' directory
+
+// Ensure the uploads directory exists
+const uploadsDir = path.join(__dirname, '../uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir);
+}
+
+// API for file uploads
+app.post('/api/upload', upload.single('image'), (req: Request, res: Response) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file uploaded.' });
+  }
+  // Return the path where the file is accessible. In a real app, you'd upload to S3/Cloudinary.
+  // For local development, we'll serve it statically.
+  res.json({ imageUrl: `/uploads/${req.file.filename}` });
+});
+
 const port = process.env.PORT || 3000;
 
 // Enable HTTP response Gzip compression
@@ -50,11 +76,15 @@ app.use((req, res, next) => {
   next();
 });
 
+// Serve uploaded files statically
+app.use('/uploads', express.static(uploadsDir));
+
 // Routes
 app.use('/api/places', placeRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/itinerary', itineraryRoutes);
 app.use('/api/user', userRoutes);
+app.use('/api/social', socialRoutes);
 app.use('/api/weather', weatherRoutes);
 
 // Health check endpoint
