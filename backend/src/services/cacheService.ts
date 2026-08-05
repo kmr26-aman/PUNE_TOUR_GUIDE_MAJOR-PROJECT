@@ -6,11 +6,14 @@ dotenv.config();
 const redisUrl = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
 
 const redis = new Redis(redisUrl, {
-  maxRetriesPerRequest: 3,
+  maxRetriesPerRequest: 1,
+  lazyConnect: true,
+  enableOfflineQueue: false,
   retryStrategy: (times) => {
-    const delay = Math.min(times * 50, 2000);
-    return delay;
+    if (times > 3) return null; // Stop retrying after 3 attempts
+    return Math.min(times * 100, 1000);
   },
+  tls: redisUrl.startsWith('rediss://') ? { rejectUnauthorized: false } : undefined,
 });
 
 redis.on('connect', () => {
@@ -18,7 +21,7 @@ redis.on('connect', () => {
 });
 
 redis.on('error', (err) => {
-  console.error('Redis connection error:', err);
+  console.warn('Redis non-fatal connection warning:', err.message);
 });
 
 export const getCachedData = async <T>(key: string): Promise<T | null> => {
@@ -26,7 +29,7 @@ export const getCachedData = async <T>(key: string): Promise<T | null> => {
     const data = await redis.get(key);
     return data ? JSON.parse(data) : null;
   } catch (err) {
-    console.error(`Error getting cache for key ${key}:`, err);
+    console.warn(`Cache miss/get error for key ${key}:`, err);
     return null;
   }
 };
@@ -35,7 +38,7 @@ export const setCachedData = async (key: string, data: any, ttlSeconds: number =
   try {
     await redis.set(key, JSON.stringify(data), 'EX', ttlSeconds);
   } catch (err) {
-    console.error(`Error setting cache for key ${key}:`, err);
+    console.warn(`Cache set error for key ${key}:`, err);
   }
 };
 
@@ -46,7 +49,7 @@ export const invalidateCache = async (pattern: string): Promise<void> => {
       await redis.del(...keys);
     }
   } catch (err) {
-    console.error(`Error invalidating cache for pattern ${pattern}:`, err);
+    console.warn(`Cache invalidate error for pattern ${pattern}:`, err);
   }
 };
 

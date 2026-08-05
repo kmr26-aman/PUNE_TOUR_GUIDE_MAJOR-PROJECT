@@ -15,20 +15,32 @@ import userRoutes from './routes/userRoutes';
 import weatherRoutes from './routes/weatherRoutes';
 import socialRoutes from './routes/socialMediaRoutes';
 
+import { Pool } from 'pg';
+
 dotenv.config();
 
 const app = express();
-const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
+
+// Initialize Postgres connection pool & Prisma adapter safely
+const connectionString = process.env.DATABASE_URL;
+const pool = new Pool({ connectionString });
+const adapter = new PrismaPg(pool);
 export const prisma = new PrismaClient({ adapter, log: ['error', 'warn'] });
 
-// Configure Multer for file uploads
-const upload = multer({ dest: 'uploads/' }); // Files will be stored in the 'uploads/' directory
+// Configure Multer for file uploads (use /tmp in serverless environment)
+const uploadsDir = process.env.VERCEL === '1'
+  ? path.join('/tmp', 'uploads')
+  : path.join(__dirname, '../uploads');
 
-// Ensure the uploads directory exists
-const uploadsDir = path.join(__dirname, '../uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir);
+try {
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+} catch (e) {
+  console.warn('Uploads folder creation warning:', e);
 }
+
+const upload = multer({ dest: uploadsDir });
 
 // API for file uploads
 app.post('/api/upload', upload.single('image'), (req: Request, res: Response) => {
