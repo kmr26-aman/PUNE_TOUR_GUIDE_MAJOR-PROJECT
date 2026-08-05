@@ -1,6 +1,14 @@
 const resolveApiBaseUrl = () => {
-  const envUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL;
-  let url = envUrl || (typeof window !== 'undefined' && window.location.hostname !== 'localhost' ? '/api' : 'http://localhost:3001/api');
+  const envUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_BACKEND_URL;
+  let url = envUrl;
+  
+  if (!url) {
+    if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
+      url = 'https://pune-tour-guide-major-project.vercel.app/api';
+    } else {
+      url = 'http://localhost:3001/api';
+    }
+  }
   
   url = url.trim().replace(/[\.\s]+$/, '').replace(/\/+$/, '');
   
