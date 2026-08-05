@@ -6,7 +6,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
   Home, Search, Navigation, MapPin, Star, Clock, ChevronDown, ChevronUp,
-  Locate, Route, X, Info, Plus, Trash2, CheckCircle2, Layers, Compass
+  Locate, X, Info, Plus, Trash2, CheckCircle2, Layers, Compass, ArrowRight, ExternalLink
 } from "lucide-react";
 import StatusBar from "../components/StatusBar";
 import {
@@ -15,13 +15,12 @@ import {
 } from "../data/api";
 import { translations } from "../data/translations";
 import { categories } from "../data/puneData";
-import { calculateDistance } from "../utils/location";
 import toast, { Toaster } from "react-hot-toast";
 
 const TRAVEL_MODES = [
-  { id: "Walking", label: "🚶 Walk", profile: "foot" },
-  { id: "Auto",    label: "🛺 Auto", profile: "driving" },
-  { id: "Driving", label: "🚗 Drive", profile: "driving" }
+  { id: "Walking", label: "🚶 Walk", profile: "foot", gmapMode: "walking" },
+  { id: "Auto",    label: "🛺 Auto", profile: "driving", gmapMode: "driving" },
+  { id: "Driving", label: "🚗 Drive", profile: "driving", gmapMode: "driving" }
 ];
 
 const MAP_STYLES = [
@@ -64,7 +63,7 @@ const getCategoryColor = (category) => {
     Heritage: "#8B3A2A", Temple: "#B87318", Nature: "#4A6741",
     Food: "#15803D", Wellness: "#0369A1", Cultural: "#7C3AED", Museum: "#BE185D"
   };
-  return map[category] || "#6B5B52";
+  return map[category] || "#8B3A2A";
 };
 
 const getCategoryEmoji = (cat) => {
@@ -90,7 +89,9 @@ function RecenterMap({ center, zoom }) {
   useEffect(() => {
     try {
       map.invalidateSize();
-      if (center && !isNaN(center[0])) map.setView(center, zoom || map.getZoom());
+      if (center && !isNaN(center[0]) && !isNaN(center[1])) {
+        map.setView(center, zoom || map.getZoom());
+      }
     } catch (e) { /* noop */ }
   }, [center, zoom, map]);
   return null;
@@ -99,31 +100,6 @@ function RecenterMap({ center, zoom }) {
 function MapClickTracker({ onClick }) {
   useMapEvents({ click: onClick });
   return null;
-}
-
-function LocateButton({ onLocate }) {
-  const map = useMap();
-  const handle = () => {
-    map.locate({ setView: true, maxZoom: 16 });
-    map.once("locationfound", (e) => onLocate(e.latlng));
-    map.once("locationerror", () => toast.error("Could not get location"));
-  };
-  return (
-    <button
-      onClick={handle}
-      title="Go to my location"
-      style={{
-        position: "absolute", bottom: 100, right: 12, zIndex: 1000,
-        width: 40, height: 40, borderRadius: "50%",
-        background: "#fff", border: "1.5px solid #EDE8DF",
-        boxShadow: "0 4px 14px rgba(0,0,0,0.18)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        cursor: "pointer", color: "#8B3A2A"
-      }}
-    >
-      <Locate size={18} />
-    </button>
-  );
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
@@ -152,25 +128,33 @@ export default function MapScreen({ userLocation, userLanguage, weatherData, onN
   const [sheetOpen, setSheetOpen] = useState(false);
   const [showStopList, setShowStopList] = useState(false);
 
-  // use browser GPS on mount
-  useEffect(() => {
+  // Auto detect browser GPS on load
+  const handleLocateUser = useCallback(() => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
           setLiveLocation(loc);
           setMapCenter([loc.lat, loc.lng]);
+          setMapZoom(15);
+          toast.success("Located your current position!");
         },
         () => {
-          // fallback to Pune center
+          toast.error("GPS access unavailable, showing Pune center");
           setMapCenter(PUNE_CENTER);
         },
         { timeout: 8000, enableHighAccuracy: true }
       );
+    } else {
+      toast.error("Geolocation not supported by browser");
     }
   }, []);
 
-  // load places & stops
+  useEffect(() => {
+    handleLocateUser();
+  }, [handleLocateUser]);
+
+  // load places & itinerary stops
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -189,7 +173,7 @@ export default function MapScreen({ userLocation, userLanguage, weatherData, onN
     })();
   }, [activeFilter]);
 
-  // filter by search
+  // Filter places by search
   const filteredPlaces = useMemo(() => {
     if (!searchQuery.trim()) return places;
     const q = searchQuery.toLowerCase();
@@ -200,17 +184,18 @@ export default function MapScreen({ userLocation, userLanguage, weatherData, onN
     );
   }, [places, searchQuery]);
 
-  // route points
+  // Calculate route points
   const origin = liveLocation
     ? [liveLocation.lat, liveLocation.lng]
-    : userLocation?.latitude ? [userLocation.latitude, userLocation.longitude] : null;
+    : userLocation?.latitude ? [userLocation.latitude, userLocation.longitude] : PUNE_CENTER;
 
   const routePoints = useMemo(() => {
     if (stops.length > 0) {
-      return stops.map(stop => {
+      const validStops = stops.map(stop => {
         const mp = places.find(p => p.name.toLowerCase() === stop.name.toLowerCase());
         return mp?.latitude && mp?.longitude ? [mp.latitude, mp.longitude] : null;
       }).filter(Boolean);
+      if (validStops.length > 0) return [origin, ...validStops];
     }
     if (selectedPlace?.latitude && selectedPlace?.longitude && origin) {
       return [origin, [selectedPlace.latitude, selectedPlace.longitude]];
@@ -218,10 +203,13 @@ export default function MapScreen({ userLocation, userLanguage, weatherData, onN
     return [];
   }, [stops, places, selectedPlace, origin]);
 
-  // fetch OSRM route
+  // Fetch OSRM route for polyline & turn-by-turn
   useEffect(() => {
     if (routePoints.length < 2) {
-      setRouteGeometry([]); setRouteStats({ distanceKm: 0, durationSec: 0 }); setDirections([]); return;
+      setRouteGeometry([]);
+      setRouteStats({ distanceKm: 0, durationSec: 0 });
+      setDirections([]);
+      return;
     }
     (async () => {
       try {
@@ -240,8 +228,9 @@ export default function MapScreen({ userLocation, userLanguage, weatherData, onN
           const steps = [];
           route.legs?.forEach(leg =>
             leg.steps?.forEach(step => {
-              if (step.name || step.maneuver.type !== "turn")
+              if (step.name || step.maneuver.type !== "turn") {
                 steps.push({ instruction: formatInstruction(step.maneuver, step.name), distance: step.distance });
+              }
             })
           );
           setDirections(steps);
@@ -252,36 +241,67 @@ export default function MapScreen({ userLocation, userLanguage, weatherData, onN
     })();
   }, [routePoints, mode]);
 
-  // ── Icon builders ─────────────────────────────────────────────────────────
+  // ── Icon Builders ─────────────────────────────────────────────────────────
 
   const placeIcon = useCallback((place, stopNum) => L.divIcon({
     html: `
-      <div style="position:relative;width:36px;height:36px;border-radius:50%;
+      <div style="position:relative;width:38px;height:38px;border-radius:50%;
         background:${getCategoryColor(place.category)};display:flex;align-items:center;
         justify-content:center;border:2.5px solid white;
-        box-shadow:0 3px 8px rgba(0,0,0,0.28);font-size:16px;transition:transform 0.2s;">
+        box-shadow:0 4px 12px rgba(0,0,0,0.35);font-size:17px;transition:transform 0.2s;">
         ${place.emoji || "📍"}
-        ${stopNum !== null ? `<div style="position:absolute;top:-7px;right:-7px;
-          background:#3D3680;color:white;width:18px;height:18px;border-radius:50%;
-          display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;
+        ${stopNum !== null ? `<div style="position:absolute;top:-6px;right:-6px;
+          background:#8B3A2A;color:white;width:18px;height:18px;border-radius:50%;
+          display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;
           border:1.5px solid white;">${stopNum}</div>` : ""}
       </div>`,
     className: "",
-    iconSize: [36, 36],
-    iconAnchor: [18, 36],
-    popupAnchor: [0, -36]
+    iconSize: [38, 38],
+    iconAnchor: [19, 38],
+    popupAnchor: [0, -38]
   }), []);
 
   const userIcon = L.divIcon({
-    html: `<div style="position:relative;">
-      <div style="width:18px;height:18px;border-radius:50%;background:#3D3680;border:2.5px solid white;box-shadow:0 0 0 4px rgba(61,54,128,0.25);"></div>
+    html: `<div style="position:relative;width:24px;height:24px;border-radius:50%;background:#8B3A2A;border:3px solid white;box-shadow:0 0 0 6px rgba(139,58,42,0.35);display:flex;align-items:center;justify-content:center;">
+      <div style="width:8px;height:8px;border-radius:50%;background:white;"></div>
     </div>`,
     className: "",
-    iconSize: [22, 22],
-    iconAnchor: [11, 11]
+    iconSize: [24, 24],
+    iconAnchor: [12, 12]
   });
 
-  // ── Handlers ───────────────────────────────────────────────────────────────
+  // ── Navigation Handlers (FIXED NAVIGATE BUTTON) ──────────────────────────
+
+  const handleNavigate = (targetPlace = null) => {
+    const destPlace = targetPlace || selectedPlace || (filteredPlaces.length > 0 ? filteredPlaces[0] : null);
+    
+    // Calculate origin coordinates
+    const origLat = liveLocation?.lat ?? userLocation?.latitude ?? PUNE_CENTER[0];
+    const origLng = liveLocation?.lng ?? userLocation?.longitude ?? PUNE_CENTER[1];
+    const origStr = `${origLat},${origLng}`;
+
+    let url = "";
+    const selectedMode = TRAVEL_MODES.find(m => m.id === mode)?.gmapMode || "driving";
+
+    if (destPlace?.latitude && destPlace?.longitude) {
+      // Direct navigation to destination place
+      url = `https://www.google.com/maps/dir/?api=1&origin=${origStr}&destination=${destPlace.latitude},${destPlace.longitude}&travelmode=${selectedMode}`;
+      toast.success(`Navigating to ${destPlace.name}... 🗺️`);
+    } else if (routePoints.length >= 2) {
+      // Multi-waypoint itinerary navigation
+      const dest = `${routePoints[routePoints.length - 1][0]},${routePoints[routePoints.length - 1][1]}`;
+      const waypoints = routePoints.slice(1, -1).map(p => `${p[0]},${p[1]}`).join("|");
+      url = `https://www.google.com/maps/dir/?api=1&origin=${origStr}&destination=${dest}${waypoints ? `&waypoints=${waypoints}` : ""}&travelmode=${selectedMode}`;
+      toast.success("Launching Google Maps Navigation... 🧭");
+    } else {
+      // Fallback navigation to Pune center or first spot
+      const dest = places.length > 0 ? `${places[0].latitude},${places[0].longitude}` : `${PUNE_CENTER[0]},${PUNE_CENTER[1]}`;
+      url = `https://www.google.com/maps/dir/?api=1&origin=${origStr}&destination=${dest}&travelmode=${selectedMode}`;
+      toast.success("Opening Google Maps Navigation... 📍");
+    }
+
+    window.open(url, "_blank");
+  };
 
   const handleToggleStop = async (id) => {
     const stop = stops.find(s => s.id === id);
@@ -317,140 +337,60 @@ export default function MapScreen({ userLocation, userLanguage, weatherData, onN
   const handleSelectPlace = (place) => {
     setSelectedPlace(place);
     setSheetOpen(true);
-    if (place.latitude && place.longitude) setMapCenter([place.latitude, place.longitude]);
-  };
-
-  const openGoogleMaps = () => {
-    if (routePoints.length < 2) return;
-    const orig = `${routePoints[0][0]},${routePoints[0][1]}`;
-    const dest = `${routePoints[routePoints.length - 1][0]},${routePoints[routePoints.length - 1][1]}`;
-    const wp = routePoints.slice(1, -1).map(p => `${p[0]},${p[1]}`).join("|");
-    const modeMap = { Walking: "walking", Auto: "driving", Driving: "driving" };
-    const url = `https://www.google.com/maps/dir/?api=1&origin=${orig}&destination=${dest}${wp ? `&waypoints=${wp}` : ""}&travelmode=${modeMap[mode] || "driving"}`;
-    window.open(url, "_blank");
+    if (place.latitude && place.longitude) {
+      setMapCenter([place.latitude, place.longitude]);
+      setMapZoom(15);
+    }
   };
 
   const currentMapStyle = MAP_STYLES.find(s => s.id === mapStyle) || MAP_STYLES[0];
 
-  // ── Render ────────────────────────────────────────────────────────────────
-
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column", background: "#0F0F10", position: "relative" }}>
-      <Toaster />
+    <div className="h-full flex flex-col bg-[#0F0F10] relative overflow-hidden font-sans">
+      <Toaster position="top-center" />
       <StatusBar light />
 
-      {/* ── Premium Floating Header ──────────────────────────────────── */}
-      <div style={{
-        position: "absolute", top: 32, left: 0, right: 0, zIndex: 900,
-        padding: "0 12px", pointerEvents: "none"
-      }}>
-        {/* Top bar */}
-        <div style={{
-          display: "flex", alignItems: "center", gap: 8, pointerEvents: "all"
-        }}>
-          {/* Back home */}
+      {/* ── 1. UNIFIED DE-CLUTTERED TOP FLOATING HEADER ──────────────────────── */}
+      <div className="absolute top-8 left-3 right-3 z-[900] flex flex-col gap-2 pointer-events-none">
+        <div className="flex items-center gap-2 pointer-events-auto">
+          {/* Back Home */}
           {onNavigateHome && (
             <button
               onClick={onNavigateHome}
-              style={{
-                width: 40, height: 40, borderRadius: 12,
-                background: "rgba(255,255,255,0.95)", border: "none",
-                boxShadow: "0 4px 16px rgba(0,0,0,0.2)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                cursor: "pointer", color: "#8B3A2A", flexShrink: 0
-              }}
+              className="w-10 h-10 rounded-2xl bg-white/95 backdrop-blur-md shadow-lg flex items-center justify-center text-[#8B3A2A] hover:bg-white transition-all flex-shrink-0 border border-gray-100"
             >
               <Home size={18} />
             </button>
           )}
 
-          {/* Search bar */}
-          <div style={{
-            flex: 1, display: "flex", alignItems: "center", gap: 8,
-            background: "rgba(255,255,255,0.96)", borderRadius: 12,
-            padding: "0 12px", height: 40,
-            boxShadow: "0 4px 16px rgba(0,0,0,0.18)"
-          }}>
-            <Search size={15} color="#8B3A2A" />
+          {/* Search Input */}
+          <div className="flex-1 flex items-center gap-2 bg-white/95 backdrop-blur-md rounded-2xl px-3.5 h-10 shadow-lg border border-gray-100">
+            <Search size={16} className="text-[#8B3A2A] flex-shrink-0" />
             <input
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search Pune spots..."
-              style={{
-                flex: 1, border: "none", outline: "none", background: "transparent",
-                fontSize: 13, color: "#1C1412", fontWeight: 500
-              }}
+              placeholder="Search Pune heritage, temples, food..."
+              className="w-full bg-transparent border-none outline-none text-xs font-semibold text-gray-900 placeholder-gray-400"
             />
             {searchQuery && (
-              <button onClick={() => setSearchQuery("")} style={{ border: "none", background: "none", cursor: "pointer", color: "#aaa", display: "flex" }}>
+              <button onClick={() => setSearchQuery("")} className="text-gray-400 hover:text-gray-600">
                 <X size={14} />
               </button>
             )}
           </div>
-
-          {/* Layer picker */}
-          <div style={{ position: "relative" }}>
-            <button
-              onClick={() => setShowStylePicker(!showStylePicker)}
-              title="Map style"
-              style={{
-                width: 40, height: 40, borderRadius: 12,
-                background: "rgba(255,255,255,0.95)", border: "none",
-                boxShadow: "0 4px 16px rgba(0,0,0,0.2)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                cursor: "pointer", color: "#8B3A2A"
-              }}
-            >
-              <Layers size={18} />
-            </button>
-            {showStylePicker && (
-              <div style={{
-                position: "absolute", top: 46, right: 0, zIndex: 1100,
-                background: "#fff", borderRadius: 12, padding: "6px",
-                boxShadow: "0 8px 24px rgba(0,0,0,0.18)", display: "flex", flexDirection: "column", gap: 4,
-                minWidth: 130
-              }}>
-                {MAP_STYLES.map(s => (
-                  <button
-                    key={s.id}
-                    onClick={() => { setMapStyle(s.id); setShowStylePicker(false); }}
-                    style={{
-                      padding: "7px 12px", borderRadius: 8, border: "none",
-                      background: mapStyle === s.id ? "#F2EAE7" : "transparent",
-                      color: mapStyle === s.id ? "#8B3A2A" : "#333",
-                      fontWeight: 600, fontSize: 12, cursor: "pointer", textAlign: "left"
-                    }}
-                  >
-                    {s.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
         </div>
 
-        {/* Category chips */}
-        <div style={{
-          display: "flex", gap: 6, marginTop: 8, overflowX: "auto",
-          paddingBottom: 2, pointerEvents: "all"
-        }} className="no-scrollbar">
+        {/* Category Chips Horizontal Bar */}
+        <div className="flex gap-1.5 overflow-x-auto no-scrollbar pointer-events-auto pb-1">
           {["All", ...categories.filter(c => c !== "All")].map(cat => (
             <button
               key={cat}
               onClick={() => setActiveFilter(cat)}
-              style={{
-                display: "flex", alignItems: "center", gap: 4,
-                padding: "5px 12px", borderRadius: 20, whiteSpace: "nowrap",
-                fontSize: 11, fontWeight: 700, cursor: "pointer", border: "none",
-                background: activeFilter === cat
-                  ? "#8B3A2A"
-                  : "rgba(255,255,255,0.92)",
-                color: activeFilter === cat ? "#fff" : "#333",
-                boxShadow: activeFilter === cat
-                  ? "0 2px 8px rgba(139,58,42,0.35)"
-                  : "0 2px 6px rgba(0,0,0,0.12)",
-                transition: "all 0.2s"
-              }}
+              className={`flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-bold whitespace-nowrap transition-all border shadow-sm ${
+                activeFilter === cat
+                  ? "bg-[#8B3A2A] text-white border-[#8B3A2A]"
+                  : "bg-white/95 backdrop-blur-md text-gray-700 border-gray-100 hover:bg-white"
+              }`}
             >
               <span>{getCategoryEmoji(cat)}</span>
               <span>{cat}</span>
@@ -459,35 +399,76 @@ export default function MapScreen({ userLocation, userLanguage, weatherData, onN
         </div>
       </div>
 
-      {/* ── Full-Screen Map ──────────────────────────────────────────── */}
-      <div style={{ flex: 1, position: "relative", zIndex: 1 }}>
+      {/* ── 2. STACKED RIGHT FLOATING ACTION BUTTONS (NO OVERLAP) ─────────────── */}
+      <div className="absolute top-36 right-3 z-[900] flex flex-col gap-2 pointer-events-auto">
+        {/* Layer Switcher */}
+        <div className="relative">
+          <button
+            onClick={() => setShowStylePicker(!showStylePicker)}
+            title="Switch Map Style"
+            className="w-10 h-10 rounded-2xl bg-white/95 backdrop-blur-md shadow-lg border border-gray-100 flex items-center justify-center text-[#8B3A2A] hover:scale-105 transition-all"
+          >
+            <Layers size={18} />
+          </button>
 
-        {/* CSS overrides */}
+          {showStylePicker && (
+            <div className="absolute top-0 right-12 bg-white rounded-2xl p-1.5 shadow-xl border border-gray-100 flex flex-col gap-1 min-w-[120px] z-[1100]">
+              {MAP_STYLES.map(s => (
+                <button
+                  key={s.id}
+                  onClick={() => { setMapStyle(s.id); setShowStylePicker(false); }}
+                  className={`px-3 py-1.5 rounded-xl text-left text-xs font-bold transition-all ${
+                    mapStyle === s.id ? "bg-[#8B3A2A]/10 text-[#8B3A2A]" : "text-gray-700 hover:bg-gray-50"
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* GPS Locate Button */}
+        <button
+          onClick={handleLocateUser}
+          title="Center on my location"
+          className="w-10 h-10 rounded-2xl bg-white/95 backdrop-blur-md shadow-lg border border-gray-100 flex items-center justify-center text-[#8B3A2A] hover:scale-105 transition-all"
+        >
+          <Locate size={18} />
+        </button>
+      </div>
+
+      {/* ── 3. FLOATING ROUTE OVERLAY BANNER (TOP CENTER) ────────────────────── */}
+      {routeStats.distanceKm > 0 && (
+        <div className="absolute top-28 left-1/2 -translate-x-1/2 z-[900] bg-gray-900/90 backdrop-blur-md text-white px-3.5 py-1.5 rounded-full shadow-xl border border-white/20 flex items-center gap-3 text-xs font-bold pointer-events-auto">
+          <span className="text-amber-400 flex items-center gap-1">
+            {TRAVEL_MODES.find(m => m.id === mode)?.label}
+          </span>
+          <span className="text-white font-extrabold">{fmtDuration(routeStats.durationSec)}</span>
+          <span className="text-gray-400">·</span>
+          <span className="text-emerald-400">{routeStats.distanceKm.toFixed(1)} km</span>
+        </div>
+      )}
+
+      {/* ── 4. FULL-SCREEN MAP CONTAINER ────────────────────────────────────── */}
+      <div className="flex-1 relative z-10">
         <style>{`
           .no-scrollbar::-webkit-scrollbar { display: none; }
           .leaflet-container { font-family: inherit; }
           .flowing-route {
-            stroke-dasharray: 10 6;
-            animation: routeFlow 20s linear infinite;
+            stroke-dasharray: 8 6;
+            animation: routeFlow 18s linear infinite;
           }
           @keyframes routeFlow {
             from { stroke-dashoffset: 0; }
             to { stroke-dashoffset: -1000; }
           }
-          @keyframes pulse {
-            0%,100% { opacity:0.3; transform:scale(0.9); }
-            50% { opacity:0; transform:scale(1.5); }
-          }
         `}</style>
 
         {loading && (
-          <div style={{
-            position: "absolute", inset: 0, zIndex: 1000, background: "rgba(15,15,16,0.7)",
-            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-            color: "#fff", gap: 10
-          }}>
-            <Compass size={32} className="animate-spin" style={{ color: "#F59E0B" }} />
-            <div style={{ fontSize: 13, fontWeight: 600 }}>Loading Pune Map...</div>
+          <div className="absolute inset-0 z-[1000] bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center text-white gap-2">
+            <Compass size={32} className="animate-spin text-amber-400" />
+            <div className="text-xs font-bold">Loading Real-Time Pune Map...</div>
           </div>
         )}
 
@@ -506,20 +487,14 @@ export default function MapScreen({ userLocation, userLanguage, weatherData, onN
           <RecenterMap center={mapCenter} zoom={mapZoom} />
           <MapClickTracker onClick={() => { setShowStylePicker(false); }} />
 
-          {/* GPS Locate button inside map */}
-          <LocateButton onLocate={(latlng) => {
-            setLiveLocation({ lat: latlng.lat, lng: latlng.lng });
-            setMapCenter([latlng.lat, latlng.lng]);
-          }} />
-
-          {/* User/Live location marker */}
+          {/* User GPS location marker */}
           {(liveLocation || userLocation) && (() => {
             const lat = liveLocation?.lat ?? userLocation?.latitude;
             const lng = liveLocation?.lng ?? userLocation?.longitude;
             return lat && lng ? (
               <Marker position={[lat, lng]} icon={userIcon}>
                 <Popup>
-                  <div style={{ fontSize: 11, fontWeight: 700 }}>📍 You are here</div>
+                  <div className="text-xs font-extrabold text-[#8B3A2A]">📍 Live Location</div>
                 </Popup>
               </Marker>
             ) : null;
@@ -536,247 +511,174 @@ export default function MapScreen({ userLocation, userLanguage, weatherData, onN
                 eventHandlers={{ click: () => handleSelectPlace(place) }}
               >
                 <Popup>
-                  <div style={{ minWidth: 160, fontFamily: "inherit" }}>
-                    <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6 }}>
-                      <span style={{ fontSize: 18 }}>{place.emoji || "📍"}</span>
+                  <div className="min-w-[160px]">
+                    <div className="flex gap-1.5 items-center mb-1.5">
+                      <span className="text-lg">{place.emoji || "📍"}</span>
                       <div>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: "#1C1412" }}>
+                        <div className="text-xs font-black text-gray-900 leading-tight">
                           {userLanguage === "Marathi" && place.name_mr ? place.name_mr : place.name}
                         </div>
-                        <div style={{ fontSize: 10, color: "#888", marginTop: 1 }}>
-                          ⭐ {place.rating?.toFixed(1)} &nbsp;·&nbsp; {place.category}
+                        <div className="text-[10px] text-gray-500 font-bold mt-0.5">
+                          ⭐ {place.rating?.toFixed(1)} · {place.category}
                         </div>
                       </div>
                     </div>
                     {place.address && (
-                      <div style={{ fontSize: 10, color: "#6B5B52", marginBottom: 6 }}>
+                      <div className="text-[10px] text-gray-600 mb-2 truncate">
                         📍 {place.address}
                       </div>
                     )}
-                    <button
-                      onClick={() => {
-                        if (stopIdx !== -1) handleDeleteStop(stops[stopIdx].id);
-                        else handleAddToItinerary(place);
-                      }}
-                      style={{
-                        width: "100%", padding: "6px 0", borderRadius: 8, border: "none",
-                        background: stopIdx !== -1 ? "#F2EAE7" : "#8B3A2A",
-                        color: stopIdx !== -1 ? "#8B3A2A" : "#fff",
-                        fontSize: 11, fontWeight: 700, cursor: "pointer"
-                      }}
-                    >
-                      {stopIdx !== -1 ? "❌ Remove Stop" : "📅 Add to Itinerary"}
-                    </button>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => handleNavigate(place)}
+                        className="flex-1 py-1 rounded-lg bg-[#8B3A2A] text-white text-[10px] font-black flex items-center justify-center gap-1 shadow-xs"
+                      >
+                        <Navigation size={10} /> Go
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (stopIdx !== -1) handleDeleteStop(stops[stopIdx].id);
+                          else handleAddToItinerary(place);
+                        }}
+                        className="flex-1 py-1 rounded-lg bg-gray-100 text-gray-800 text-[10px] font-bold"
+                      >
+                        {stopIdx !== -1 ? "Remove" : "+ Plan"}
+                      </button>
+                    </div>
                   </div>
                 </Popup>
               </Marker>
             );
           })}
 
-          {/* Route polyline */}
+          {/* Route Polyline */}
           {(routeGeometry.length > 1 || routePoints.length > 1) && (
             <>
               <Polyline
                 positions={routeGeometry.length > 1 ? routeGeometry : routePoints}
-                color={stops.length > 0 ? "#8B3A2A" : "#3D3680"}
+                color="#8B3A2A"
                 weight={5}
-                opacity={0.85}
+                opacity={0.9}
                 pathOptions={{ className: "flowing-route" }}
               />
-              {/* Glow underline */}
               <Polyline
                 positions={routeGeometry.length > 1 ? routeGeometry : routePoints}
-                color={stops.length > 0 ? "#F59E0B" : "#818CF8"}
+                color="#F59E0B"
                 weight={10}
-                opacity={0.18}
+                opacity={0.2}
               />
             </>
           )}
         </MapContainer>
-
-        {/* ── Fullscreen Expand Badge ────────────────────────────────── */}
-        {/* Live stats bar (bottom-left overlay) */}
-        {routeStats.distanceKm > 0 && (
-          <div style={{
-            position: "absolute", bottom: 148, left: 12, zIndex: 900,
-            background: "rgba(255,255,255,0.96)", borderRadius: 12,
-            padding: "8px 14px", boxShadow: "0 4px 16px rgba(0,0,0,0.18)",
-            display: "flex", flexDirection: "column", gap: 2
-          }}>
-            <div style={{ fontSize: 10, color: "#888", fontWeight: 600 }}>
-              {TRAVEL_MODES.find(m => m.id === mode)?.label}
-            </div>
-            <div style={{ fontSize: 15, fontWeight: 800, color: "#1C1412" }}>
-              {fmtDuration(routeStats.durationSec)}
-            </div>
-            <div style={{ fontSize: 10, color: "#8B3A2A", fontWeight: 700 }}>
-              {routeStats.distanceKm.toFixed(1)} km
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* ── Bottom Controls Panel ────────────────────────────────────── */}
-      <div style={{
-        background: "#fff", borderTop: "1px solid #EDE8DF",
-        padding: "10px 16px 16px", zIndex: 800,
-        boxShadow: "0 -8px 24px rgba(0,0,0,0.1)"
-      }}>
-        {/* Travel mode selector */}
-        <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+      {/* ── 5. BOTTOM CONTROLS BAR (CLEAN & NON-OVERLAPPING) ──────────────────── */}
+      <div className="bg-white border-t border-gray-100 p-3 z-[800] shadow-2xl flex flex-col gap-2.5">
+        {/* Travel Mode Pills */}
+        <div className="flex gap-2">
           {TRAVEL_MODES.map(m => (
             <button
               key={m.id}
               onClick={() => setMode(m.id)}
-              style={{
-                flex: 1, padding: "7px 4px", borderRadius: 10, border: "1.5px solid",
-                borderColor: mode === m.id ? "#8B3A2A" : "#EDE8DF",
-                background: mode === m.id ? "#8B3A2A" : "#fff",
-                color: mode === m.id ? "#fff" : "#555",
-                fontSize: 11, fontWeight: 700, cursor: "pointer", transition: "all 0.15s"
-              }}
+              className={`flex-1 py-1.5 rounded-xl text-xs font-bold border transition-all ${
+                mode === m.id
+                  ? "bg-[#8B3A2A] text-white border-[#8B3A2A] shadow-xs"
+                  : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"
+              }`}
             >
               {m.label}
             </button>
           ))}
         </div>
 
-        {/* Action buttons */}
-        <div style={{ display: "flex", gap: 8 }}>
+        {/* Action Row */}
+        <div className="flex gap-2 items-center">
           {/* Directions toggle */}
           {directions.length > 0 && (
             <button
-              onClick={() => setShowDirections(!showDirections)}
-              style={{
-                flex: 1, padding: "9px 12px", borderRadius: 10, border: "1.5px solid #EDE8DF",
-                background: showDirections ? "#F2EAE7" : "#fff",
-                color: "#8B3A2A", fontSize: 12, fontWeight: 700,
-                cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 5
-              }}
+              onClick={() => { setShowDirections(!showDirections); setShowStopList(false); }}
+              className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1 transition-all ${
+                showDirections ? "bg-[#8B3A2A]/10 text-[#8B3A2A] border-[#8B3A2A]/30" : "bg-white text-gray-700 border-gray-200"
+              }`}
             >
               {showDirections ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-              Directions ({directions.length})
+              <span>Steps ({directions.length})</span>
             </button>
           )}
 
-          {/* Stops list toggle */}
-          {(stops.length > 0 || filteredPlaces.length > 0) && (
-            <button
-              onClick={() => setShowStopList(!showStopList)}
-              style={{
-                flex: 1, padding: "9px 12px", borderRadius: 10, border: "1.5px solid #EDE8DF",
-                background: showStopList ? "#F2EAE7" : "#fff",
-                color: "#333", fontSize: 12, fontWeight: 700,
-                cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 5
-              }}
-            >
-              <MapPin size={13} />
-              {stops.length > 0 ? `${stops.length} Stops` : `${filteredPlaces.length} Spots`}
-            </button>
-          )}
-
-          {/* Navigate CTA */}
+          {/* Spots toggle */}
           <button
-            onClick={openGoogleMaps}
-            disabled={routePoints.length < 2}
-            style={{
-              flex: 1.4, padding: "9px 14px", borderRadius: 10, border: "none",
-              background: routePoints.length < 2 ? "#EDE8DF" : "linear-gradient(135deg,#8B3A2A,#B87318)",
-              color: routePoints.length < 2 ? "#aaa" : "#fff",
-              fontSize: 12, fontWeight: 800, cursor: routePoints.length < 2 ? "not-allowed" : "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-              boxShadow: routePoints.length >= 2 ? "0 4px 12px rgba(139,58,42,0.35)" : "none"
-            }}
+            onClick={() => { setShowStopList(!showStopList); setShowDirections(false); }}
+            className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1 transition-all ${
+              showStopList ? "bg-[#8B3A2A]/10 text-[#8B3A2A] border-[#8B3A2A]/30" : "bg-white text-gray-700 border-gray-200"
+            }`}
           >
-            <Navigation size={14} />
-            Navigate
+            <MapPin size={13} />
+            <span>{stops.length > 0 ? `${stops.length} Stops` : `${filteredPlaces.length} Spots`}</span>
+          </button>
+
+          {/* 🌟 ALWAYS-WORKING PRIMARY NAVIGATE BUTTON 🌟 */}
+          <button
+            onClick={() => handleNavigate()}
+            className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#8B3A2A] to-[#B87318] text-white text-xs font-black flex items-center justify-center gap-1.5 shadow-md hover:opacity-95 active:scale-95 transition-all"
+          >
+            <Navigation size={15} />
+            <span>
+              {selectedPlace
+                ? `Navigate to ${selectedPlace.name.split(' ')[0]}`
+                : stops.length > 0
+                ? `Navigate ${stops.length} Stops`
+                : "Navigate Route"}
+            </span>
+            <ExternalLink size={12} className="opacity-80" />
           </button>
         </div>
 
-        {/* ── Turn-by-turn Directions ── */}
+        {/* Turn-by-Turn Expandable Drawer */}
         {showDirections && directions.length > 0 && (
-          <div style={{
-            marginTop: 10, maxHeight: 160, overflowY: "auto",
-            background: "#FBF8F3", borderRadius: 10, padding: "8px 10px",
-            border: "1px solid #EDE8DF"
-          }} className="no-scrollbar">
+          <div className="max-h-40 overflow-y-auto bg-gray-50 rounded-xl p-2.5 border border-gray-200 no-scrollbar space-y-1.5">
             {directions.map((step, idx) => (
-              <div key={idx} style={{
-                display: "flex", justifyContent: "space-between", alignItems: "flex-start",
-                fontSize: 11, paddingBottom: 6, marginBottom: 6,
-                borderBottom: idx !== directions.length - 1 ? "1px solid #EDE8DF" : "none"
-              }}>
-                <div style={{ color: "#1C1412", fontWeight: 600, flex: 1, paddingRight: 8 }}>
-                  {step.instruction}
-                </div>
-                <div style={{ color: "#8B3A2A", fontWeight: 700, fontSize: 10, flexShrink: 0 }}>
-                  {step.distance > 1000
-                    ? `${(step.distance / 1000).toFixed(1)} km`
-                    : `${Math.round(step.distance)} m`}
-                </div>
+              <div key={idx} className="flex justify-between items-start text-[11px] pb-1 border-b border-gray-200 last:border-none">
+                <span className="text-gray-800 font-semibold flex-1 pr-2">{step.instruction}</span>
+                <span className="text-[#8B3A2A] font-bold text-[10px] flex-shrink-0">
+                  {step.distance > 1000 ? `${(step.distance / 1000).toFixed(1)} km` : `${Math.round(step.distance)} m`}
+                </span>
               </div>
             ))}
           </div>
         )}
 
-        {/* ── Place / Stop List ── */}
+        {/* Place / Stop List Expandable Drawer */}
         {showStopList && (
-          <div style={{
-            marginTop: 10, maxHeight: 200, overflowY: "auto",
-            background: "#FBF8F3", borderRadius: 10,
-            border: "1px solid #EDE8DF"
-          }} className="no-scrollbar">
-            {(stops.length > 0 ? stops : filteredPlaces).map((item, idx) => {
+          <div className="max-h-44 overflow-y-auto bg-gray-50 rounded-xl border border-gray-200 no-scrollbar divide-y divide-gray-200">
+            {(stops.length > 0 ? stops : filteredPlaces).map((item) => {
               const isStop = stops.length > 0;
               const isSelected = selectedPlace?.id === item.id;
-              const isCompleted = completedStopId === item.id;
               return (
                 <div
                   key={item.id}
                   onClick={() => !isStop && handleSelectPlace(item)}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 10,
-                    padding: "10px 12px", cursor: isStop ? "default" : "pointer",
-                    borderBottom: idx !== (stops.length > 0 ? stops : filteredPlaces).length - 1 ? "1px solid #EDE8DF" : "none",
-                    background: isSelected || isCompleted ? "#F2EAE7" : "transparent",
-                    transition: "background 0.2s"
-                  }}
+                  className={`flex items-center gap-2.5 p-2.5 cursor-pointer hover:bg-gray-100 transition-all ${
+                    isSelected ? "bg-[#8B3A2A]/10" : ""
+                  }`}
                 >
-                  <div style={{
-                    width: 28, height: 28, borderRadius: 8, flexShrink: 0, fontSize: 14,
-                    background: isStop ? "#F2EAE7" : (item.bgColor || "#F2EAE7"),
-                    display: "flex", alignItems: "center", justifyContent: "center"
-                  }}>
+                  <div className="w-7 h-7 rounded-lg bg-white border border-gray-200 flex items-center justify-center text-sm flex-shrink-0 shadow-xs">
                     {item.emoji || "📍"}
                   </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "#1C1412", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-bold text-gray-900 truncate">
                       {userLanguage === "Marathi" && item.name_mr ? item.name_mr : item.name}
                     </div>
-                    <div style={{ fontSize: 10, color: "#888", marginTop: 1 }}>
+                    <div className="text-[10px] text-gray-500 font-medium truncate mt-0.5">
                       {isStop ? item.time : `⭐ ${item.rating} · ${item.address || item.category}`}
                     </div>
                   </div>
-                  {isStop && (
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <button
-                        onClick={() => handleToggleStop(item.id)}
-                        style={{
-                          width: 24, height: 24, borderRadius: "50%", border: item.done ? "none" : "1.5px solid #EDE8DF",
-                          background: item.done ? "#4A6741" : "transparent", color: item.done ? "#fff" : "transparent",
-                          fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center"
-                        }}
-                      >✓</button>
-                      <button
-                        onClick={() => handleDeleteStop(item.id)}
-                        style={{
-                          width: 24, height: 24, borderRadius: "50%", border: "none",
-                          background: "#F2EAE7", color: "#8B3A2A",
-                          fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center"
-                        }}
-                      ><Trash2 size={11} /></button>
-                    </div>
-                  )}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleNavigate(item); }}
+                    className="p-1.5 rounded-lg bg-[#8B3A2A] text-white text-[10px] font-bold flex items-center gap-1 shadow-xs flex-shrink-0"
+                  >
+                    <Navigation size={10} /> Go
+                  </button>
                 </div>
               );
             })}
@@ -784,118 +686,77 @@ export default function MapScreen({ userLocation, userLanguage, weatherData, onN
         )}
       </div>
 
-      {/* ── Bottom Sheet: Selected Place Detail ─────────────────────── */}
+      {/* ── 6. BOTTOM SHEET: SELECTED PLACE DETAIL (SLIDE UP) ────────────────── */}
       {sheetOpen && selectedPlace && (
-        <div
-          style={{
-            position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 2000,
-            background: "#fff", borderRadius: "20px 20px 0 0",
-            boxShadow: "0 -10px 40px rgba(0,0,0,0.25)",
-            padding: "16px", maxHeight: "55vh", overflowY: "auto"
-          }}
-          className="no-scrollbar"
-        >
-          {/* Drag handle */}
-          <div style={{ width: 36, height: 4, background: "#EDE8DF", borderRadius: 4, margin: "0 auto 14px" }} />
-
+        <div className="absolute bottom-0 left-0 right-0 z-[2000] bg-white rounded-t-3xl shadow-2xl p-4 max-h-[50vh] overflow-y-auto no-scrollbar border-t border-gray-100 animate-in slide-in-from-bottom duration-200">
+          <div className="w-9 h-1 bg-gray-300 rounded-full mx-auto mb-3" />
           <button
             onClick={() => setSheetOpen(false)}
-            style={{
-              position: "absolute", top: 14, right: 14, width: 30, height: 30, borderRadius: "50%",
-              background: "#F2EAE7", border: "none", cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center", color: "#8B3A2A"
-            }}
-          ><X size={14} /></button>
+            className="absolute top-3.5 right-3.5 w-7 h-7 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center hover:bg-gray-200"
+          >
+            <X size={14} />
+          </button>
 
-          {/* Place image */}
           {selectedPlace.image && (
             <img
               src={selectedPlace.image}
               alt={selectedPlace.name}
-              style={{ width: "100%", height: 140, objectFit: "cover", borderRadius: 14, marginBottom: 12 }}
+              className="w-full h-32 object-cover rounded-2xl mb-3 shadow-xs"
             />
           )}
 
-          {/* Title row */}
-          <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 10 }}>
-            <div style={{
-              width: 44, height: 44, borderRadius: 12, flexShrink: 0, fontSize: 22,
-              background: `${getCategoryColor(selectedPlace.category)}22`,
-              display: "flex", alignItems: "center", justifyContent: "center"
-            }}>
+          <div className="flex items-start gap-3 mb-2.5">
+            <div className="w-11 h-11 rounded-2xl bg-[#8B3A2A]/10 text-[#8B3A2A] flex items-center justify-center text-xl flex-shrink-0">
               {selectedPlace.emoji || "📍"}
             </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 16, fontWeight: 800, color: "#1C1412" }}>
+            <div>
+              <h3 className="text-base font-black text-gray-900 leading-tight">
                 {userLanguage === "Marathi" && selectedPlace.name_mr ? selectedPlace.name_mr : selectedPlace.name}
-              </div>
-              <div style={{ fontSize: 11, color: "#888", marginTop: 2, display: "flex", gap: 6, alignItems: "center" }}>
-                <span>⭐ {selectedPlace.rating?.toFixed(1)}</span>
-                <span>·</span>
-                <span style={{ background: `${getCategoryColor(selectedPlace.category)}22`, color: getCategoryColor(selectedPlace.category), padding: "1px 8px", borderRadius: 10, fontWeight: 700, fontSize: 10 }}>
+              </h3>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-xs font-bold text-amber-500">⭐ {selectedPlace.rating?.toFixed(1)}</span>
+                <span className="text-gray-300">•</span>
+                <span className="text-[10px] font-black text-[#8B3A2A] bg-[#8B3A2A]/10 px-2 py-0.5 rounded-full">
                   {selectedPlace.category}
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Info chips */}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
-            {selectedPlace.address && (
-              <div style={{ display: "flex", alignItems: "center", gap: 4, background: "#FBF8F3", borderRadius: 8, padding: "5px 10px", fontSize: 11, color: "#555", fontWeight: 600 }}>
-                <MapPin size={11} color="#8B3A2A" />
-                {selectedPlace.address}
-              </div>
-            )}
-            {selectedPlace.openHours && (
-              <div style={{ display: "flex", alignItems: "center", gap: 4, background: "#FBF8F3", borderRadius: 8, padding: "5px 10px", fontSize: 11, color: "#555", fontWeight: 600 }}>
-                <Clock size={11} color="#8B3A2A" />
-                {selectedPlace.openHours}
-              </div>
-            )}
-          </div>
+          {selectedPlace.address && (
+            <p className="text-xs text-gray-600 font-medium flex items-center gap-1 mb-2">
+              <MapPin size={12} className="text-[#8B3A2A]" />
+              <span>{selectedPlace.address}</span>
+            </p>
+          )}
 
-          {/* Description */}
           {selectedPlace.description && (
-            <p style={{ fontSize: 12, color: "#555", lineHeight: 1.6, marginBottom: 14 }}>
+            <p className="text-xs text-gray-600 leading-relaxed mb-4">
               {selectedPlace.description}
             </p>
           )}
 
-          {/* Action buttons */}
-          <div style={{ display: "flex", gap: 8 }}>
+          <div className="flex gap-2">
             <button
               onClick={() => {
                 const stopIdx = stops.findIndex(s => s.name.toLowerCase() === selectedPlace.name.toLowerCase());
                 if (stopIdx !== -1) handleDeleteStop(stops[stopIdx].id);
                 else handleAddToItinerary(selectedPlace);
               }}
-              style={{
-                flex: 1, padding: "10px", borderRadius: 12, border: "1.5px solid #EDE8DF",
-                background: "#FBF8F3", color: "#8B3A2A", fontSize: 12, fontWeight: 700, cursor: "pointer"
-              }}
+              className="flex-1 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-800 text-xs font-bold hover:bg-gray-100 transition-all"
             >
               {stops.some(s => s.name.toLowerCase() === selectedPlace.name.toLowerCase())
                 ? "❌ Remove Stop"
                 : "📅 Add to Itinerary"}
             </button>
+
+            {/* Go Here button in sheet */}
             <button
-              onClick={() => {
-                if (selectedPlace.latitude && selectedPlace.longitude) {
-                  const url = `https://www.google.com/maps/dir/?api=1&destination=${selectedPlace.latitude},${selectedPlace.longitude}&travelmode=${mode.toLowerCase() === "auto" ? "driving" : mode.toLowerCase()}`;
-                  window.open(url, "_blank");
-                }
-              }}
-              style={{
-                flex: 1, padding: "10px", borderRadius: 12, border: "none",
-                background: "linear-gradient(135deg,#8B3A2A,#B87318)",
-                color: "#fff", fontSize: 12, fontWeight: 800, cursor: "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-                boxShadow: "0 4px 12px rgba(139,58,42,0.35)"
-              }}
+              onClick={() => handleNavigate(selectedPlace)}
+              className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-[#8B3A2A] to-[#B87318] text-white text-xs font-black flex items-center justify-center gap-1.5 shadow-md hover:opacity-95 transition-all"
             >
               <Navigation size={14} />
-              Go Here
+              <span>Go Here</span>
             </button>
           </div>
         </div>
