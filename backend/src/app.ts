@@ -67,7 +67,15 @@ app.use(
   })
 );
 
-app.use(cors());
+// CORS — allow local dev + Vercel frontend deployments
+app.use(cors({
+  origin: [
+    'http://localhost:5173',
+    'http://localhost:5174',
+    /\.vercel\.app$/,
+  ],
+  credentials: true
+}));
 app.use(express.json());
 
 // Request Logger Middleware
@@ -118,8 +126,11 @@ if (process.env.NODE_ENV === 'production' && distExists) {
   });
 }
 
-app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
-});
+// Only start HTTP server when NOT running as a Vercel serverless function
+if (process.env.VERCEL !== '1') {
+  app.listen(port, () => {
+    console.log(`Server is running on port ${port}`);
+  });
+}
 
 export default app;
