@@ -618,9 +618,60 @@ export default function HomeScreen({ onPlaceSelect, onSearchClick, userLocation,
         </button>
       </div>
 
+      {/* 📍 Home Tab Quick Create & Check-in (+) Section (Scrolls naturally with Home tab content) */}
+      <div className="px-4 pb-3 flex-shrink-0">
+        <div className="bg-gradient-to-r from-[#8B3A2A] via-[#742E20] to-[#5C2317] text-white p-3.5 rounded-2xl shadow-sm flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowFabMenu(!showFabMenu)}
+              className="w-11 h-11 rounded-2xl bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition-transform active:scale-95 border border-white/20 flex-shrink-0"
+              title="Quick Add Menu"
+            >
+              {showFabMenu ? <X size={22} /> : <Plus size={22} />}
+            </button>
+            <div>
+              <p className="text-xs font-black text-white">Punekar Quick Actions (+)</p>
+              <p className="text-[10px] text-amber-200 font-medium">Post photos or check-in at live locations</p>
+            </div>
+          </div>
 
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => onSearchClick({ tab: "createPost" })}
+              className="bg-white text-[#8B3A2A] px-3 py-1.5 rounded-xl text-xs font-black hover:bg-amber-50 transition-all flex items-center gap-1 shadow-xs"
+            >
+              <Camera size={14} />
+              <span>Post</span>
+            </button>
+            <button
+              onClick={() => toast.success("Checked in at Shaniwar Wada 📍 (+20 XP)")}
+              className="bg-amber-400 text-gray-900 px-3 py-1.5 rounded-xl text-xs font-black hover:bg-amber-300 transition-all flex items-center gap-1 shadow-xs"
+            >
+              <MapPin size={14} />
+              <span>Check-in</span>
+            </button>
+          </div>
+        </div>
 
-      {/* 🏆 Popular Spots */}
+        {showFabMenu && (
+          <div className="mt-2.5 bg-white dark:bg-[#241E1C] p-3 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm flex justify-around animate-in fade-in zoom-in duration-200">
+            <button
+              onClick={() => { setShowFabMenu(false); onSearchClick({ tab: "createPost" }); }}
+              className="flex items-center gap-2 text-xs font-bold text-[#8B3A2A] hover:underline"
+            >
+              <Camera size={16} />
+              <span>Share Pune Moment 📷</span>
+            </button>
+            <button
+              onClick={() => { setShowFabMenu(false); toast.success("Checked in at Shaniwar Wada 📍 (+20 XP)"); }}
+              className="flex items-center gap-2 text-xs font-bold text-emerald-600 hover:underline"
+            >
+              <MapPin size={16} />
+              <span>GPS Live Check-in 📍</span>
+            </button>
+          </div>
+        )}
+      </div>
       <div className="mb-4">
         <div className="px-4 flex justify-between items-center mb-2.5">
           <h2 className={`text-sm font-extrabold ${textTitle}`}>{t.popularSpots || "Popular Spots in Pune"}</h2>
@@ -1266,34 +1317,6 @@ export default function HomeScreen({ onPlaceSelect, onSearchClick, userLocation,
         </div>
       )}
 
-      {/* 📍 Floating Action Button (FAB) */}
-      <div className="fixed bottom-20 right-4 z-40">
-        {showFabMenu && (
-          <div className="mb-3 space-y-2 flex flex-col items-end animate-in fade-in zoom-in duration-200">
-            <button
-              onClick={() => { setShowFabMenu(false); onSearchClick({ tab: "createPost" }); }}
-              className="bg-[#8B3A2A] text-white px-3 py-2 rounded-2xl shadow-lg text-xs font-bold flex items-center gap-2"
-            >
-              <Camera size={16} />
-              <span>Create Post</span>
-            </button>
-            <button
-              onClick={() => { setShowFabMenu(false); toast.success("Checked in at Shaniwar Wada 📍 (+20 XP)"); }}
-              className="bg-[#8B3A2A] text-white px-3 py-2 rounded-2xl shadow-lg text-xs font-bold flex items-center gap-2"
-            >
-              <MapPin size={16} />
-              <span>Check-in</span>
-            </button>
-          </div>
-        )}
-
-        <button
-          onClick={() => setShowFabMenu(!showFabMenu)}
-          className="w-14 h-14 rounded-full bg-[#8B3A2A] text-white shadow-xl flex items-center justify-center hover:scale-105 active:scale-95 transition-all border-2 border-white"
-        >
-          {showFabMenu ? <X size={24} /> : <Plus size={24} />}
-        </button>
-      </div>
     </div>
   );
 }
