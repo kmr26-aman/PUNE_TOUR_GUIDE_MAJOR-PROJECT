@@ -373,7 +373,7 @@ export default function HomeScreen({ onPlaceSelect, onSearchClick, userLocation,
       <StatusBar light={!isDarkMode} />
 
       {/* Enhanced Hero Header Section */}
-      <div className="bg-gradient-to-br from-[#8B3A2A] via-[#742E20] to-[#5C2317] text-white p-4 pt-5 pb-7 relative overflow-hidden shadow-md">
+      <div className="bg-gradient-to-br from-[#8B3A2A] via-[#742E20] to-[#5C2317] text-white p-4 pt-5 pb-5 relative overflow-hidden shadow-md">
         <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-xl pointer-events-none" />
         <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-amber-500/10 rounded-full blur-xl pointer-events-none" />
 
@@ -411,22 +411,22 @@ export default function HomeScreen({ onPlaceSelect, onSearchClick, userLocation,
             </div>
           </div>
 
-          {/* 👋 Dynamic Greeting + User Info & Ask AI */}
-          <div className="flex items-center justify-between mt-2 mb-3">
+          {/* 👋 Dynamic Greeting + User Info & Ask AI (Prominent & Unobstructed) */}
+          <div className="flex items-center justify-between my-3">
             <div className="flex items-center gap-3">
               <img
                 src={userAvatar}
                 alt="User Avatar"
-                className="w-12 h-12 rounded-full object-cover border-2 border-amber-400 shadow-md"
+                className="w-12 h-12 rounded-full object-cover border-2 border-amber-400 shadow-md flex-shrink-0"
                 onError={(e) => {
                   e.target.src = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80";
                 }}
               />
               <div>
-                <h1 className="text-lg font-black leading-tight flex items-center gap-1.5">
+                <h1 className="text-lg font-black leading-tight flex items-center gap-1.5 text-white">
                   <span>{getGreetingTime()}</span>
                 </h1>
-                <p className="text-xs text-amber-200 font-bold">
+                <p className="text-xs text-amber-200 font-bold mt-0.5">
                   Welcome back, {userName}! 👋
                 </p>
               </div>
@@ -434,14 +434,14 @@ export default function HomeScreen({ onPlaceSelect, onSearchClick, userLocation,
 
             <button
               onClick={() => setShowAiModal(true)}
-              className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white px-2.5 py-1.5 rounded-2xl text-[10px] font-black shadow-md flex flex-col items-center justify-center gap-0.5 active:scale-95 transition-all min-w-[64px]"
+              className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white px-3 py-1.5 rounded-2xl text-[10px] font-black shadow-md flex flex-col items-center justify-center gap-0.5 active:scale-95 transition-all min-w-[68px] flex-shrink-0"
             >
               <Bot size={18} />
               <span className="leading-none text-[9px]">Ask Aamhi AI</span>
             </button>
           </div>
 
-          {/* 🌦️ WEATHER & TEMP STATUS BAR (FIRST) */}
+          {/* 🌦️ WEATHER & TEMP STATUS BAR */}
           <div className="flex flex-wrap items-center gap-2 text-xs mb-3">
             <div className="bg-white/15 backdrop-blur-md border border-white/20 px-3 py-1 rounded-xl flex items-center gap-1.5 font-bold">
               <span>{weatherData?.weather === "Sunny" ? "☀️" : "🌧️"}</span>
@@ -526,11 +526,11 @@ export default function HomeScreen({ onPlaceSelect, onSearchClick, userLocation,
         </div>
       </div>
 
-      {/* 🎤 Voice + AI Search Bar */}
-      <div className="px-4 -mt-4 relative z-20">
+      {/* 🎤 Voice + AI Search Bar (Positioned cleanly below Header without overlapping) */}
+      <div className="px-4 mt-3 relative z-20">
         <div
           onClick={() => onSearchClick()}
-          className={`${bgCard} p-3 rounded-2xl border shadow-lg flex items-center gap-3 cursor-pointer group transition-all`}
+          className={`${bgCard} p-3 rounded-2xl border shadow-md flex items-center gap-3 cursor-pointer group transition-all`}
         >
           <Search size={18} className="text-[#8B3A2A]" />
           <span className="text-xs font-semibold text-gray-500 flex-1 truncate">
