@@ -2,7 +2,7 @@ import { Router } from 'express';
 import {
   getUserStats, registerUser, loginUser, googleAuthUser,
   getUserMe, getUserProfile, getUserActivity, updateUserAvatar,
-  requestForgotPassword, resetPasswordWithOTP, autoDispatchSos
+  requestForgotPassword, resetPasswordWithOTP, autoDispatchSos, updateUserProfile
 } from '../controllers/userController';
 import { authMiddleware } from '../middleware/auth';
 
@@ -16,6 +16,7 @@ router.post('/reset-password', resetPasswordWithOTP);
 router.post('/auto-dispatch-sos', autoDispatchSos);
 router.get('/me', authMiddleware, getUserMe);
 router.put('/avatar', authMiddleware, updateUserAvatar);
+router.put('/profile', authMiddleware, updateUserProfile);
 router.get('/stats', authMiddleware, getUserStats);
 router.get('/:id/activity', authMiddleware, getUserActivity);
 router.get('/:id', authMiddleware, getUserProfile);

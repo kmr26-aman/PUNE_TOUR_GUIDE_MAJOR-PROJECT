@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useUserLocation } from "../hooks/useUserLocation";
-import { fetchUserStats, fetchUserMe } from "../data/api.js";
+import { fetchUserStats, fetchUserMe, updateUserProfileApi } from "../data/api.js";
 import { translations } from "../data/translations";
 import StatusBar from "../components/StatusBar";
 import { 
@@ -8,7 +8,7 @@ import {
   Globe, Bell, HardDrive, HelpCircle, FileText, Sparkles, ChevronRight, X, 
   Moon, Sun, QrCode, Share2, MapPin, Bookmark, Camera, Video, Compass, 
   Wallet, Ticket, Users, Lock, AlertTriangle, Trash2, Star, BookOpen, Film,
-  ShieldAlert, Activity
+  ShieldAlert, Activity, Plus, Eye, EyeOff, Bot, RefreshCw, UploadCloud
 } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 
@@ -21,11 +21,18 @@ const BADGES_LIST = [
   { id: 6, title: "Pride of Pune", category: "Legend 🏆", icon: "🏆", color: "bg-rose-100 text-rose-800 border-rose-300", xp: 500, unlocked: true, desc: "Reached Punekar Level 3+ and earned 500 total XP points!" },
 ];
 
-const MOCK_STORIES = [
+const PRESET_BANNERS = [
+  { id: "b1", title: "Shaniwar Wada Heritage", url: "https://images.unsplash.com/photo-1589308078059-be1415eab4c3?auto=format&fit=crop&w=800&q=80" },
+  { id: "b2", title: "Sinhagad Monsoon Trail", url: "https://images.unsplash.com/photo-1626014903708-ecb661d9a26a?auto=format&fit=crop&w=800&q=80" },
+  { id: "b3", title: "FC Road Night Glow", url: "https://images.unsplash.com/photo-1567157577867-05ccb1388e66?auto=format&fit=crop&w=800&q=80" },
+  { id: "b4", title: "Vetal Tekdi Sunset", url: "https://images.unsplash.com/photo-1511497584788-876761c119ef?auto=format&fit=crop&w=800&q=80" },
+];
+
+const DEFAULT_STORIES = [
   { id: 1, title: "Shaniwar Wada", icon: "🚩", cover: "https://images.unsplash.com/photo-1589308078059-be1415eab4c3?auto=format&fit=crop&w=200&q=80" },
   { id: 2, title: "FC Road Eats", icon: "☕", cover: "https://images.unsplash.com/photo-1567157577867-05ccb1388e66?auto=format&fit=crop&w=200&q=80" },
   { id: 3, title: "Sinhagad Trek", icon: "⛰️", cover: "https://images.unsplash.com/photo-1626014903708-ecb661d9a26a?auto=format&fit=crop&w=200&q=80" },
-  { id: 4, title: "Ganpati Festival", icon: "🌺", cover: "https://images.unsplash.com/photo-1662446736466-9b57d079942a?auto=format&fit=crop&w=200&q=80" },
+  { id: 4, title: "Ganpati Utsav", icon: "🌺", cover: "https://images.unsplash.com/photo-1662446736466-9b57d079942a?auto=format&fit=crop&w=200&q=80" },
 ];
 
 export default function ProfileScreen({ onPlaceSelect, userLocation, userLanguage, setUserLanguage, onLogout, onNavigateHome, isDarkMode, setIsDarkMode }) {
@@ -34,12 +41,17 @@ export default function ProfileScreen({ onPlaceSelect, userLocation, userLanguag
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showAddStoryModal, setShowAddStoryModal] = useState(false);
   const [selectedBadge, setSelectedBadge] = useState(null);
+  const [activeStory, setActiveStory] = useState(null);
   
+  // Privacy Control: Hide / Mask Email
+  const [showEmail, setShowEmail] = useState(false);
+
   // Active Profile Sub-Tab
   const [activeMenuTab, setActiveMenuTab] = useState("stats"); // 'stats', 'media', 'wallet', 'settings'
 
-  // User Profile Identity State
+  // Dynamic User Profile Identity State
   const [userName, setUserName] = useState(() => localStorage.getItem("pune_user_name") || "Sourav Paul");
   const [userHandle, setUserHandle] = useState(() => localStorage.getItem("pune_user_handle") || "@punekar_explorer");
   const [userEmail, setUserEmail] = useState(() => localStorage.getItem("pune_user_email") || "explorer@punetourguide.com");
@@ -47,34 +59,36 @@ export default function ProfileScreen({ onPlaceSelect, userLocation, userLanguag
   const [userAvatar, setUserAvatar] = useState(() => localStorage.getItem("pune_user_avatar") || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80");
   const [coverPhoto, setCoverPhoto] = useState(() => localStorage.getItem("pune_cover_photo") || "https://images.unsplash.com/photo-1589308078059-be1415eab4c3?auto=format&fit=crop&w=800&q=80");
 
-  // Feature Toggles
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [cacheCleared, setCacheCleared] = useState(false);
-
-  // ROADSoS Emergency Contacts & Medical Details State
-  const [emContactName, setEmContactName] = useState(() => localStorage.getItem("pune_user_em_name") || "");
-  const [emContactPhone, setEmContactPhone] = useState(() => localStorage.getItem("pune_user_em_phone") || "");
-  const [emContactPhone2, setEmContactPhone2] = useState(() => localStorage.getItem("pune_user_em_phone2") || "");
-  const [emBloodGroup, setEmBloodGroup] = useState(() => localStorage.getItem("pune_user_blood_group") || "O+");
-  const [emMedicalNotes, setEmMedicalNotes] = useState(() => localStorage.getItem("pune_user_med_notes") || "");
-  const [emAutoAlert, setEmAutoAlert] = useState(() => localStorage.getItem("pune_user_em_auto_alert") !== "false");
-
-  const handleSaveEmergencyDetails = (e) => {
-    e.preventDefault();
-    if (!emContactPhone || emContactPhone.trim().length < 8) {
-      toast.error("Please enter a valid Emergency Contact phone number!");
-      return;
+  // Dynamic Stories State
+  const [stories, setStories] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("pune_user_stories")) || DEFAULT_STORIES;
+    } catch {
+      return DEFAULT_STORIES;
     }
-    localStorage.setItem("pune_user_em_name", emContactName.trim());
-    localStorage.setItem("pune_user_em_phone", emContactPhone.trim());
-    localStorage.setItem("pune_user_em_phone2", emContactPhone2.trim());
-    localStorage.setItem("pune_user_blood_group", emBloodGroup);
-    localStorage.setItem("pune_user_med_notes", emMedicalNotes.trim());
-    localStorage.setItem("pune_user_em_auto_alert", emAutoAlert ? "true" : "false");
-    toast.success("🚨 Emergency Contacts & ROADSoS Medical Profile Saved!");
-  };
+  });
+
+  // New Story Form State
+  const [newStoryTitle, setNewStoryTitle] = useState("");
+  const [newStoryIcon, setNewStoryIcon] = useState("🚩");
+  const [newStoryCover, setNewStoryCover] = useState("");
+
+  // AI Daily Summary State
+  const [aiSummaryDate, setAiSummaryDate] = useState(new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }));
+  const [aiSummaryTip, setAiSummaryTip] = useState("Punekar AI Insight: Start your morning early at Shaniwar Wada before 10 AM to beat the crowd, then head to Vaishali on FC Road for authentic SPDP and Filter Coffee!");
+
+  const avatarInputRef = useRef(null);
+  const coverInputRef = useRef(null);
 
   const t = translations[userLanguage] || translations.English;
+
+  // Mask Email Helper
+  const maskEmail = (emailStr) => {
+    if (!emailStr || !emailStr.includes("@")) return "••••••••@hidden.com";
+    const [namePart, domainPart] = emailStr.split("@");
+    if (namePart.length <= 2) return `••@${domainPart}`;
+    return `${namePart[0]}••••${namePart[namePart.length - 1]}@${domainPart}`;
+  };
 
   const user = {
     name: userName,
@@ -86,6 +100,10 @@ export default function ProfileScreen({ onPlaceSelect, userLocation, userLanguag
     xp: userStats?.totalPoints || 620,
     level: Math.floor((userStats?.totalPoints || 620) / 100) + 1,
   };
+
+  useEffect(() => {
+    localStorage.setItem("pune_user_stories", JSON.stringify(stories));
+  }, [stories]);
 
   useEffect(() => {
     localStorage.setItem("pune_theme", isDarkMode ? "dark" : "light");
@@ -101,6 +119,7 @@ export default function ProfileScreen({ onPlaceSelect, userLocation, userLanguag
           if (me.value.name) setUserName(me.value.name);
           if (me.value.email) setUserEmail(me.value.email);
           if (me.value.avatarUrl) setUserAvatar(me.value.avatarUrl);
+          if (me.value.coverUrl) setCoverPhoto(me.value.coverUrl);
         }
       } catch (error) {
         console.error("Failed to fetch profile details:", error);
@@ -111,14 +130,64 @@ export default function ProfileScreen({ onPlaceSelect, userLocation, userLanguag
     loadProfileData();
   }, []);
 
-  const handleSaveProfile = () => {
+  const handleSaveProfile = async () => {
     localStorage.setItem("pune_user_name", userName);
     localStorage.setItem("pune_user_handle", userHandle);
     localStorage.setItem("pune_user_bio", userBio);
     localStorage.setItem("pune_user_avatar", userAvatar);
     localStorage.setItem("pune_cover_photo", coverPhoto);
+
+    try {
+      await updateUserProfileApi({
+        name: userName,
+        avatarUrl: userAvatar,
+        coverUrl: coverPhoto,
+      });
+    } catch (e) {
+      console.warn("Backend profile sync warning:", e);
+    }
+
     setShowEditProfileModal(false);
     toast.success("Profile updated successfully!");
+  };
+
+  const handleAddStory = (e) => {
+    e.preventDefault();
+    if (!newStoryTitle.trim()) {
+      toast.error("Please enter a highlight title!");
+      return;
+    }
+
+    const storyObj = {
+      id: Date.now(),
+      title: newStoryTitle.trim(),
+      icon: newStoryIcon || "🚩",
+      cover: newStoryCover.trim() || "https://images.unsplash.com/photo-1589308078059-be1415eab4c3?auto=format&fit=crop&w=200&q=80",
+    };
+
+    setStories(prev => [storyObj, ...prev]);
+    setNewStoryTitle("");
+    setNewStoryCover("");
+    setShowAddStoryModal(false);
+    toast.success("Highlight story added! ✨");
+  };
+
+  const handleDeleteStory = (storyId) => {
+    setStories(prev => prev.filter(s => s.id !== storyId));
+    setActiveStory(null);
+    toast.success("Highlight story deleted.");
+  };
+
+  const handleRegenerateAiSummary = () => {
+    const TIPS = [
+      "Punekar AI Daily Recommendation: Early morning trek to Sinhagad Fort for famous Kanda Bhajji & Pithla Bhakri!",
+      "Culture Tip: Visit Dagdusheth Halwai Ganpati Temple in afternoon for serene darshan & historic Tulshibaug shopping.",
+      "Foodie Pick: Try authentic Punekar Misal at Kata Kirr or Bedekar Misal followed by Mastani at Sujata Cold Storage!",
+      "Nature Escape: Peaceful evening walk along Vetal Tekdi sunset point to enjoy clean breeze and scenic city view."
+    ];
+    const randomTip = TIPS[Math.floor(Math.random() * TIPS.length)];
+    setAiSummaryTip(randomTip);
+    toast.success("AI Daily Summary Regenerated! 🤖✨");
   };
 
   const handleShareProfile = () => {
@@ -133,17 +202,8 @@ export default function ProfileScreen({ onPlaceSelect, userLocation, userLanguag
     }
   };
 
-  const handleClearCache = () => {
-    localStorage.removeItem("pune_api_cache");
-    setCacheCleared(true);
-    toast.success("App storage & offline cache cleared successfully!");
-    setTimeout(() => setCacheCleared(false), 3000);
-  };
-
-  // Theme styling helpers
   const bgMain = isDarkMode ? "bg-[#181311] text-[#FAF6F0]" : "bg-[#FBF8F3] text-[#1C1412]";
   const bgCard = isDarkMode ? "bg-[#241E1C] border-[#362D2A]" : "bg-white border-gray-200";
-  const bgSubCard = isDarkMode ? "bg-[#2D2522] border-[#3A302C]" : "bg-[#FAF6F0] border-[#EDE8DF]";
   const textTitle = isDarkMode ? "text-white" : "text-gray-900";
   const textMuted = isDarkMode ? "text-gray-400" : "text-gray-500";
 
@@ -164,21 +224,10 @@ export default function ProfileScreen({ onPlaceSelect, userLocation, userLanguag
               <Home size={18} />
             </button>
           )}
-          <h1 className={`text-lg font-extrabold ${textTitle}`}>
-            {userLanguage === "Marathi" ? "माझी प्रोफाईल" : "My Profile"}
-          </h1>
+          <h1 className={`text-lg font-black ${textTitle}`}>{userLanguage === "Marathi" ? "माझी प्रोफाईल" : "My Profile"}</h1>
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Quick Dark / Light Mode Toggle */}
-          <button
-            onClick={() => setIsDarkMode(!isDarkMode)}
-            title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
-            className="w-9 h-9 flex items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 transition-all"
-          >
-            {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
-
           {/* QR Code Profile */}
           <button
             onClick={() => setShowQrModal(true)}
@@ -201,15 +250,15 @@ export default function ProfileScreen({ onPlaceSelect, userLocation, userLanguag
 
       {/* Profile Cover Photo & Identity Card */}
       <div className="relative">
-        {/* Cover Photo */}
+        {/* Custom Cover Photo Banner */}
         <div
-          className="h-32 w-full bg-cover bg-center relative"
+          className="h-36 w-full bg-cover bg-center relative"
           style={{ backgroundImage: `url(${user.cover})` }}
         >
-          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
           <button
             onClick={handleShareProfile}
-            className="absolute top-3 right-3 bg-black/50 hover:bg-black/70 text-white p-2 rounded-xl backdrop-blur-md transition-all text-xs font-bold flex items-center gap-1.5"
+            className="absolute top-3 right-3 bg-black/50 hover:bg-black/70 text-white p-2 rounded-xl backdrop-blur-md transition-all text-xs font-bold flex items-center gap-1.5 border border-white/20"
           >
             <Share2 size={14} />
             <span>Share</span>
@@ -219,7 +268,7 @@ export default function ProfileScreen({ onPlaceSelect, userLocation, userLanguag
         {/* Profile Avatar & Info Overlay */}
         <div className={`px-4 pb-4 pt-0 border-b ${bgCard} relative`}>
           <div className="flex items-end justify-between -mt-10 mb-3">
-            <div className="relative">
+            <div className="relative cursor-pointer" onClick={() => setShowEditProfileModal(true)}>
               <img
                 src={user.avatar}
                 alt="User Avatar"
@@ -245,35 +294,77 @@ export default function ProfileScreen({ onPlaceSelect, userLocation, userLanguag
               <h2 className={`text-xl font-black ${textTitle}`}>{user.name}</h2>
               <ShieldCheck size={18} className="text-[#8B3A2A]" title="Verified Explorer" />
             </div>
-            <p className="text-xs text-gray-500 font-semibold">{user.handle} · {user.email}</p>
+
+            {/* Masked / Protected Email for Privacy */}
+            <div className="flex items-center gap-2 mt-0.5">
+              <p className="text-xs text-gray-500 font-semibold flex items-center gap-1">
+                <span>{user.handle}</span>
+                <span>·</span>
+                <span>{showEmail ? user.email : maskEmail(user.email)}</span>
+              </p>
+              <button
+                onClick={() => setShowEmail(!showEmail)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+                title={showEmail ? "Hide Email" : "Show Email"}
+              >
+                {showEmail ? <EyeOff size={13} /> : <Eye size={13} />}
+              </button>
+            </div>
+
             <p className="text-xs text-[#8B3A2A] dark:text-amber-400 font-bold mt-1.5">
               {user.bio}
             </p>
           </div>
 
-          {/* Social Stats Row: Followers, Following & Posts */}
+          {/* Social Dynamic Stats Row: Followers, Following & Posts */}
           <div className={`mt-4 pt-3 border-t ${isDarkMode ? 'border-gray-800' : 'border-gray-100'} grid grid-cols-3 gap-2 text-center`}>
             <div>
-              <p className={`text-lg font-black ${textTitle}`}>{userStats?.followerCount || 128}</p>
+              <p className={`text-lg font-black ${textTitle}`}>{userStats?.followerCount || 142}</p>
               <p className={`text-[11px] font-bold ${textMuted}`}>Followers</p>
             </div>
             <div>
-              <p className={`text-lg font-black ${textTitle}`}>{userStats?.followingCount || 94}</p>
+              <p className={`text-lg font-black ${textTitle}`}>{userStats?.followingCount || 86}</p>
               <p className={`text-[11px] font-bold ${textMuted}`}>Following</p>
             </div>
             <div>
-              <p className={`text-lg font-black ${textTitle}`}>{userStats?.postsCount || 18}</p>
-              <p className={`text-[11px] font-bold ${textMuted}`}>Moments</p>
+              <p className={`text-lg font-black ${textTitle}`}>{userStats?.discoveredCount || 24}</p>
+              <p className={`text-[11px] font-bold ${textMuted}`}>Explored</p>
             </div>
           </div>
 
-          {/* Stories & Highlights Carousel */}
+          {/* Dynamic Stories & Highlights Carousel */}
           <div className="mt-4 pt-3 border-t border-gray-100/10">
-            <p className={`text-[11px] font-extrabold uppercase tracking-wider ${textMuted} mb-2`}>Stories & Highlights</p>
+            <div className="flex items-center justify-between mb-2">
+              <p className={`text-[11px] font-extrabold uppercase tracking-wider ${textMuted}`}>Stories & Highlights</p>
+              <button
+                onClick={() => setShowAddStoryModal(true)}
+                className="text-xs font-bold text-[#8B3A2A] flex items-center gap-0.5 hover:underline"
+              >
+                <Plus size={14} />
+                <span>Add Highlight</span>
+              </button>
+            </div>
+
             <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1">
-              {MOCK_STORIES.map(story => (
-                <div key={story.id} className="flex flex-col items-center flex-shrink-0 cursor-pointer">
-                  <div className="w-13 h-13 rounded-full p-0.5 bg-gradient-to-tr from-[#8B3A2A] to-amber-400">
+              {/* Add Story Button */}
+              <div
+                onClick={() => setShowAddStoryModal(true)}
+                className="flex flex-col items-center flex-shrink-0 cursor-pointer group"
+              >
+                <div className="w-13 h-13 rounded-full border-2 border-dashed border-[#8B3A2A] flex items-center justify-center bg-[#8B3A2A]/5 text-[#8B3A2A] group-hover:bg-[#8B3A2A]/10 transition-colors">
+                  <Plus size={20} />
+                </div>
+                <span className="text-[10px] font-bold text-gray-500 mt-1">New</span>
+              </div>
+
+              {/* Dynamic Highlights List */}
+              {stories.map(story => (
+                <div
+                  key={story.id}
+                  onClick={() => setActiveStory(story)}
+                  className="flex flex-col items-center flex-shrink-0 cursor-pointer group relative"
+                >
+                  <div className="w-13 h-13 rounded-full p-0.5 bg-gradient-to-tr from-[#8B3A2A] to-amber-400 group-hover:scale-105 transition-transform">
                     <img src={story.cover} alt={story.title} className="w-12 h-12 rounded-full object-cover border-2 border-white dark:border-[#241E1C]" />
                   </div>
                   <span className="text-[10px] font-bold text-gray-700 dark:text-gray-300 mt-1 max-w-[56px] truncate">{story.title}</span>
@@ -293,7 +384,7 @@ export default function ProfileScreen({ onPlaceSelect, userLocation, userLanguag
           }`}
         >
           <Award size={15} />
-          <span>Stats & Badges</span>
+          <span>Stats & AI Summary</span>
         </button>
 
         <button
@@ -327,154 +418,102 @@ export default function ProfileScreen({ onPlaceSelect, userLocation, userLanguag
         </button>
       </div>
 
-      {/* Tab Content 1: Stats, Badges & AI Diary */}
+      {/* Tab Content 1: Dynamic AI Daily Summary, Stats & Badges */}
       {activeMenuTab === "stats" && (
         <div className="p-4 space-y-4">
-          {/* Punekar XP Progress Card */}
-          <div className={`${bgCard} p-4 rounded-2xl border shadow-sm`}>
-            <div className="flex justify-between items-center mb-1.5">
-              <span className={`text-xs font-black ${textTitle} flex items-center gap-1.5`}>
-                <Award size={16} className="text-[#8B3A2A]" />
-                <span>Punekar Score & Level</span>
-              </span>
-              <span className="text-xs font-black text-[#8B3A2A]">{user.xp} XP</span>
+          {/* Enhanced Interactive AI Daily Summary & Diary */}
+          <div className="bg-gradient-to-br from-[#8B3A2A] via-[#742E20] to-[#5C2317] text-white p-4 rounded-2xl shadow-md border border-[#9A4231] relative overflow-hidden">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-amber-400 text-gray-900 flex items-center justify-center font-black">
+                  <Bot size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white">Daily Punekar AI Summary</h3>
+                  <p className="text-[10px] text-amber-200 font-bold">{aiSummaryDate}</p>
+                </div>
+              </div>
+
+              <button
+                onClick={handleRegenerateAiSummary}
+                className="p-1.5 rounded-full bg-white/15 hover:bg-white/25 text-amber-300 hover:text-white transition-all"
+                title="Regenerate Summary"
+              >
+                <RefreshCw size={14} />
+              </button>
             </div>
-            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden shadow-inner mb-2">
-              <div
-                className="bg-gradient-to-r from-[#8B3A2A] to-amber-500 h-3 rounded-full transition-all duration-500"
-                style={{ width: `${Math.min(100, (user.xp % 100))}%` }}
-              ></div>
-            </div>
-            <p className="text-[10px] text-gray-500 font-semibold text-right">
-              {100 - (user.xp % 100)} XP to Level {user.level + 1}
+
+            <p className="text-xs text-white/90 leading-relaxed bg-black/20 p-3 rounded-xl border border-white/10 font-medium mb-3">
+              "{aiSummaryTip}"
             </p>
+
+            <div className="grid grid-cols-2 gap-2 text-center text-xs">
+              <div className="bg-white/10 p-2 rounded-xl border border-white/10">
+                <p className="text-[10px] text-amber-200 uppercase font-black">Total XP Earned</p>
+                <p className="text-base font-black text-white mt-0.5">{user.xp} XP</p>
+              </div>
+              <div className="bg-white/10 p-2 rounded-xl border border-white/10">
+                <p className="text-[10px] text-amber-200 uppercase font-black">Badges Unlocked</p>
+                <p className="text-base font-black text-white mt-0.5">5 / 6</p>
+              </div>
+            </div>
           </div>
 
-          {/* Badges Grid */}
-          <div className={`${bgCard} p-4 rounded-2xl border shadow-sm`}>
-            <h3 className={`text-xs font-extrabold uppercase tracking-wider ${textTitle} mb-3 flex items-center gap-1.5`}>
-              <Sparkles size={16} className="text-[#8B3A2A]" />
-              <span>Cultural Badges Showcase</span>
-            </h3>
-            <div className="grid grid-cols-2 gap-3">
-              {BADGES_LIST.map((badge) => (
+          {/* Punekar Badges Showcase */}
+          <div>
+            <h3 className={`text-xs font-black uppercase tracking-wider ${textTitle} mb-2.5`}>Punekar Badges & Achievements</h3>
+            <div className="grid grid-cols-2 gap-2.5">
+              {BADGES_LIST.map(badge => (
                 <div
                   key={badge.id}
                   onClick={() => setSelectedBadge(badge)}
-                  className={`p-3 rounded-2xl border cursor-pointer transition-all ${
-                    badge.unlocked
-                      ? `${bgSubCard} hover:border-[#8B3A2A]`
-                      : "bg-gray-100 dark:bg-gray-800/40 opacity-50 border-gray-200"
-                  }`}
+                  className={`${bgCard} p-3 rounded-2xl border shadow-sm cursor-pointer hover:border-[#8B3A2A] transition-all flex items-start gap-2.5`}
                 >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-2xl">{badge.icon}</span>
-                    <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border ${badge.color}`}>
+                  <div className="text-2xl">{badge.icon}</div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-xs font-extrabold truncate ${textTitle}`}>{badge.title}</p>
+                    <p className="text-[10px] text-gray-500 font-semibold">{badge.category}</p>
+                    <span className={`inline-block text-[9px] font-black px-1.5 py-0.5 rounded-md border mt-1 ${badge.color}`}>
                       +{badge.xp} XP
                     </span>
                   </div>
-                  <h4 className={`text-xs font-extrabold ${textTitle} leading-tight`}>{badge.title}</h4>
-                  <p className="text-[10px] text-gray-500 font-medium mt-0.5">{badge.category}</p>
                 </div>
               ))}
             </div>
           </div>
-
-          {/* AI Travel Diary & Recommendations */}
-          <div className={`${bgCard} p-4 rounded-2xl border shadow-sm`}>
-            <div className="flex items-center gap-2 mb-2">
-              <BookOpen size={18} className="text-[#8B3A2A]" />
-              <h3 className={`text-xs font-extrabold uppercase tracking-wider ${textTitle}`}>AI Travel Diary</h3>
-            </div>
-            <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed mb-3">
-              "Completed 5 heritage spots this weekend! Next recommended trip: <strong>Sinhagad Fort Sunrise & Pitla Bhakri Crawl</strong>."
-            </p>
-            <button
-              onClick={() => toast.success("AI Travel Diary updated!")}
-              className="text-xs font-bold text-[#8B3A2A] bg-[#8B3A2A]/10 px-3 py-1.5 rounded-xl border border-[#8B3A2A]/20"
-            >
-              Generate AI Summary
-            </button>
-          </div>
         </div>
       )}
 
-      {/* Tab Content 2: Media, Wishlist & Saved */}
+      {/* Tab Content 2: Media & Saved Items */}
       {activeMenuTab === "media" && (
-        <div className="p-4 space-y-4">
-          {/* Visited Places & Wishlist */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className={`${bgCard} p-3.5 rounded-2xl border shadow-sm flex items-center gap-3`}>
-              <div className="w-9 h-9 rounded-xl bg-[#8B3A2A]/10 flex items-center justify-center text-[#8B3A2A]">
-                <MapPin size={18} />
-              </div>
-              <div>
-                <p className={`text-sm font-black ${textTitle}`}>{userStats?.completedStops || 14}</p>
-                <p className="text-[10px] text-gray-500 font-bold">Visited Places</p>
-              </div>
-            </div>
-
-            <div className={`${bgCard} p-3.5 rounded-2xl border shadow-sm flex items-center gap-3`}>
-              <div className="w-9 h-9 rounded-xl bg-[#8B3A2A]/10 flex items-center justify-center text-[#8B3A2A]">
-                <Bookmark size={18} />
-              </div>
-              <div>
-                <p className={`text-sm font-black ${textTitle}`}>{userStats?.savedCount || 8}</p>
-                <p className="text-[10px] text-gray-500 font-bold">Bucket List</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Photos & Videos Gallery */}
-          <div className={`${bgCard} p-4 rounded-2xl border shadow-sm`}>
-            <h3 className={`text-xs font-extrabold uppercase tracking-wider ${textTitle} mb-3 flex items-center gap-1.5`}>
-              <Film size={16} className="text-[#8B3A2A]" />
-              <span>Posts, Photos & Reels</span>
-            </h3>
-            <div className="grid grid-cols-3 gap-2">
-              <img src="https://images.unsplash.com/photo-1589308078059-be1415eab4c3?auto=format&fit=crop&w=200&q=80" alt="Media" className="w-full h-24 object-cover rounded-xl" />
-              <img src="https://images.unsplash.com/photo-1570168007204-dfb528c6958f?auto=format&fit=crop&w=200&q=80" alt="Media" className="w-full h-24 object-cover rounded-xl" />
-              <img src="https://images.unsplash.com/photo-1609828913647-7576722d36d2?auto=format&fit=crop&w=200&q=80" alt="Media" className="w-full h-24 object-cover rounded-xl" />
-            </div>
+        <div className="p-4 space-y-3">
+          <div className={`${bgCard} p-4 rounded-2xl border shadow-sm text-center py-8`}>
+            <Camera size={32} className="mx-auto text-[#8B3A2A] mb-2" />
+            <h3 className={`text-sm font-black ${textTitle}`}>My Moments Gallery</h3>
+            <p className="text-xs text-gray-500 mt-1">Photos and moments you share appear here and in the main feed.</p>
           </div>
         </div>
       )}
 
-      {/* Tab Content 3: Wallet, Bookings & Friends */}
+      {/* Tab Content 3: Wallet & Passes */}
       {activeMenuTab === "wallet" && (
-        <div className="p-4 space-y-4">
-          {/* Punekar Wallet Card */}
-          <div className="bg-gradient-to-r from-[#8B3A2A] to-[#742E20] text-white p-4 rounded-2xl shadow-md border border-[#742E20]">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-xs font-bold text-white/80">Punekar Explorer Wallet</span>
-              <Wallet size={18} className="text-amber-400" />
-            </div>
-            <p className="text-2xl font-black text-white">₹ 250 <span className="text-xs font-bold text-amber-300">Coins</span></p>
-            <p className="text-[10px] text-white/70 mt-1">Redeem for Heritage Pass discounts & Food Coupons</p>
-          </div>
-
-          {/* Bookings & Travel Buddies */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className={`${bgCard} p-3.5 rounded-2xl border shadow-sm flex items-center gap-3 cursor-pointer`} onClick={() => toast.success("No active ticket bookings")}>
-              <Ticket size={18} className="text-[#8B3A2A]" />
+        <div className="p-4 space-y-3">
+          <div className={`${bgCard} p-4 rounded-2xl border shadow-sm flex items-center justify-between`}>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center font-black">
+                🪙
+              </div>
               <div>
-                <p className={`text-xs font-bold ${textTitle}`}>Booking History</p>
-                <p className="text-[10px] text-gray-500">2 Past Tickets</p>
+                <p className={`text-xs font-bold ${textTitle}`}>Punekar Token Wallet</p>
+                <p className="text-[10px] text-gray-500">250 Pune Explorer Coins</p>
               </div>
             </div>
-
-            <div className={`${bgCard} p-3.5 rounded-2xl border shadow-sm flex items-center gap-3 cursor-pointer`} onClick={() => toast.success("Travel Buddies list coming soon")}>
-              <Users size={18} className="text-[#8B3A2A]" />
-              <div>
-                <p className={`text-xs font-bold ${textTitle}`}>Travel Buddies</p>
-                <p className="text-[10px] text-gray-500">5 Friends connected</p>
-              </div>
-            </div>
+            <button className="px-3 py-1.5 bg-[#8B3A2A] text-white text-xs font-bold rounded-xl">Redeem</button>
           </div>
         </div>
       )}
 
-      {/* Tab Content 4: Settings, Theme & Security */}
+      {/* Tab Content 4: Settings & Theme */}
       {activeMenuTab === "settings" && (
         <div className="p-4 space-y-3">
           {/* Dark / Light Mode Switcher */}
@@ -522,29 +561,10 @@ export default function ProfileScreen({ onPlaceSelect, userLocation, userLanguag
               <option value="Gujarati">ગુજરાતી</option>
             </select>
           </div>
-
-          {/* Privacy & Block / Report */}
-          <div className={`${bgCard} p-3.5 rounded-2xl border shadow-sm space-y-2.5`}>
-            <div onClick={() => toast.success("Account privacy is set to Public Explorer")} className="flex items-center justify-between cursor-pointer">
-              <div className="flex items-center gap-3">
-                <Lock size={16} className="text-[#8B3A2A]" />
-                <span className={`text-xs font-bold ${textTitle}`}>Privacy & Security Settings</span>
-              </div>
-              <ChevronRight size={16} className="text-gray-400" />
-            </div>
-
-            <div onClick={() => toast.success("Block / Report options available")} className="flex items-center justify-between cursor-pointer pt-2 border-t border-gray-100/10">
-              <div className="flex items-center gap-3">
-                <AlertTriangle size={16} className="text-amber-600" />
-                <span className={`text-xs font-bold ${textTitle}`}>Report & Blocked Users</span>
-              </div>
-              <ChevronRight size={16} className="text-gray-400" />
-            </div>
-          </div>
         </div>
       )}
 
-      {/* Styled Logout Button Matched Perfectly to App Color Combination */}
+      {/* Styled Logout Button */}
       <div className="p-4 mt-auto space-y-2">
         <button
           onClick={onLogout}
@@ -567,6 +587,101 @@ export default function ProfileScreen({ onPlaceSelect, userLocation, userLanguag
           Delete Account
         </button>
       </div>
+
+      {/* Active Story Modal */}
+      {activeStory && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xs overflow-hidden relative text-center">
+            <img src={activeStory.cover} alt={activeStory.title} className="w-full h-64 object-cover" />
+            <div className="p-4">
+              <span className="text-2xl">{activeStory.icon}</span>
+              <h3 className="text-base font-black text-gray-900 mt-1">{activeStory.title}</h3>
+              <p className="text-xs text-gray-500 mt-1">Highlighted Pune Moment</p>
+              
+              <div className="flex gap-2 mt-4">
+                <button
+                  onClick={() => handleDeleteStory(activeStory.id)}
+                  className="flex-1 py-2 bg-rose-50 text-rose-600 text-xs font-bold rounded-xl border border-rose-200 hover:bg-rose-100 flex items-center justify-center gap-1"
+                >
+                  <Trash2 size={14} />
+                  <span>Delete</span>
+                </button>
+                <button
+                  onClick={() => setActiveStory(null)}
+                  className="flex-1 py-2 bg-[#8B3A2A] text-white text-xs font-bold rounded-xl"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Story Modal */}
+      {showAddStoryModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white p-5 rounded-3xl shadow-2xl w-full max-w-xs">
+            <h3 className="text-base font-black text-gray-900 mb-3">Add Highlight Story</h3>
+            <form onSubmit={handleAddStory} className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Highlight Title</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Sinhagad Trek, Misal Trail"
+                  className="w-full p-2.5 border rounded-xl text-xs outline-none bg-[#FBF8F3]"
+                  value={newStoryTitle}
+                  onChange={(e) => setNewStoryTitle(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Category Emoji</label>
+                <div className="flex gap-2">
+                  {["🚩", "☕", "⛰️", "🌺", "📸", "🏰"].map(emoji => (
+                    <button
+                      type="button"
+                      key={emoji}
+                      onClick={() => setNewStoryIcon(emoji)}
+                      className={`p-2 rounded-xl text-lg border ${newStoryIcon === emoji ? 'border-[#8B3A2A] bg-amber-50' : 'border-gray-200'}`}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Cover Photo Image URL</label>
+                <input
+                  type="text"
+                  placeholder="https://images.unsplash.com/..."
+                  className="w-full p-2.5 border rounded-xl text-xs outline-none bg-[#FBF8F3]"
+                  value={newStoryCover}
+                  onChange={(e) => setNewStoryCover(e.target.value)}
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddStoryModal(false)}
+                  className="flex-1 py-2.5 bg-gray-100 text-gray-700 text-xs font-bold rounded-xl"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 bg-[#8B3A2A] text-white text-xs font-bold rounded-xl"
+                >
+                  Add Highlight
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* QR Profile Modal */}
       {showQrModal && (
@@ -638,13 +753,13 @@ export default function ProfileScreen({ onPlaceSelect, userLocation, userLanguag
         </div>
       )}
 
-      {/* Edit Profile Modal */}
+      {/* Edit Profile & Cover Banner Modal */}
       {showEditProfileModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white p-6 rounded-3xl shadow-2xl w-full max-w-sm border border-gray-100">
-            <h2 className="text-lg font-black text-gray-900 mb-4">{t.editProfileModal || "Edit Profile"}</h2>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white p-5 rounded-3xl shadow-2xl w-full max-w-sm border border-gray-100 my-auto">
+            <h2 className="text-base font-black text-gray-900 mb-3">{t.editProfileModal || "Edit Profile & Banners"}</h2>
             
-            <div className="space-y-3 mb-5">
+            <div className="space-y-3 mb-4 max-h-[70vh] overflow-y-auto pr-1">
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1">Full Name</label>
                 <input
@@ -668,36 +783,64 @@ export default function ProfileScreen({ onPlaceSelect, userLocation, userLanguag
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1">Bio / Tagline</label>
                 <textarea
-                  className="w-full p-2.5 border border-gray-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-[#8B3A2A] bg-[#FBF8F3]"
+                  className="w-full p-2 border border-gray-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-[#8B3A2A] bg-[#FBF8F3]"
                   value={userBio}
                   onChange={(e) => setUserBio(e.target.value)}
                   rows="2"
                 ></textarea>
               </div>
 
+              {/* Cover Banner Selector */}
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">Avatar Photo URL</label>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Select Profile Background Cover Banner</label>
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                  {PRESET_BANNERS.map(banner => (
+                    <div
+                      key={banner.id}
+                      onClick={() => setCoverPhoto(banner.url)}
+                      className={`h-14 rounded-xl bg-cover bg-center cursor-pointer border-2 relative overflow-hidden ${coverPhoto === banner.url ? 'border-[#8B3A2A] shadow-md' : 'border-transparent'}`}
+                      style={{ backgroundImage: `url(${banner.url})` }}
+                    >
+                      <span className="absolute bottom-0 inset-x-0 bg-black/60 text-[9px] font-bold text-white text-center py-0.5 truncate px-1">
+                        {banner.title}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
                 <input
                   type="text"
-                  className="w-full p-2.5 border border-gray-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-[#8B3A2A] bg-[#FBF8F3]"
+                  placeholder="Or enter custom Cover Image URL"
+                  className="w-full p-2 border border-gray-300 rounded-xl text-xs outline-none bg-[#FBF8F3]"
+                  value={coverPhoto}
+                  onChange={(e) => setCoverPhoto(e.target.value)}
+                />
+              </div>
+
+              {/* Avatar Selector */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Avatar Profile Photo URL</label>
+                <input
+                  type="text"
+                  className="w-full p-2 border border-gray-300 rounded-xl text-xs outline-none bg-[#FBF8F3]"
                   value={userAvatar}
                   onChange={(e) => setUserAvatar(e.target.value)}
                 />
               </div>
             </div>
 
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-2 pt-2 border-t">
               <button
                 onClick={() => setShowEditProfileModal(false)}
-                className="px-4 py-2.5 bg-gray-100 text-gray-700 text-xs font-bold rounded-xl"
+                className="px-4 py-2 bg-gray-100 text-gray-700 text-xs font-bold rounded-xl"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSaveProfile}
-                className="px-4 py-2.5 bg-[#8B3A2A] text-white text-xs font-bold rounded-xl"
+                className="px-4 py-2 bg-[#8B3A2A] text-white text-xs font-bold rounded-xl"
               >
-                Save Changes
+                Save Profile
               </button>
             </div>
           </div>

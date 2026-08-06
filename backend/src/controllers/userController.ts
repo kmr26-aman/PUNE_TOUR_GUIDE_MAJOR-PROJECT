@@ -550,3 +550,32 @@ export const autoDispatchSos = async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Failed to auto-dispatch SOS alert' });
   }
 };
+
+export const updateUserProfile = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+    const { name, avatarUrl } = req.body;
+
+    const updatedUser = await prisma.user.update({
+      where: { id: req.user.id },
+      data: {
+        ...(name && { name: name.trim() }),
+        ...(avatarUrl && { avatarUrl }),
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        avatarUrl: true,
+        xp: true,
+      }
+    });
+
+    await invalidateCache(`user:profile:${req.user.id}`);
+    await invalidateCache(`user:stats:${req.user.id}`);
+    res.json(updatedUser);
+  } catch (error) {
+    console.error('Failed to update user profile:', error);
+    res.status(500).json({ error: 'Failed to update user profile' });
+  }
+};

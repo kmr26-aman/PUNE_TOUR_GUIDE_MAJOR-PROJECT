@@ -578,6 +578,17 @@ export const updateCommentApi = async (commentId, text) => {
   return response.json();
 };
 
+export const updateUserProfileApi = async (profileData) => {
+  const response = await fetch(`${API_BASE_URL}/user/profile`, {
+    method: 'PUT',
+    headers: getHeaders(),
+    body: JSON.stringify(profileData),
+  });
+  if (!response.ok) throw new Error('Failed to update profile');
+  clearApiCache('user');
+  return response.json();
+};
+
 export const fetchUserActivity = async (userId) => {
   const cacheKey = `user:activity:${userId}`;
   const cached = getCached(cacheKey);
