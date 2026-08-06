@@ -227,8 +227,15 @@ export default function AuthScreen({ onAuthSuccess, userLanguage, setUserLanguag
           setLoading(false);
           return;
         }
-        const data = await registerUser(name, email, password);
-        onAuthSuccess(data.user);
+        await registerUser(name, email, password);
+        // User record is saved in Neon PostgreSQL DB. Now prompt user to sign in!
+        setIsLogin(true);
+        setPassword("");
+        const successMsg =
+          userLanguage === "Marathi" ? "नोंदणी यशस्वी झाली! कृपया आता साइन इन करा." :
+          userLanguage === "Hindi" ? "पंजीकरण सफल! कृपया अब साइन इन करें।" :
+          "Account created in database! Please sign in with your email & password.";
+        setError(successMsg);
       }
     } catch (err) {
       console.error("Authentication error:", err);

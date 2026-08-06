@@ -38,6 +38,39 @@ const CreatePostScreen = ({ onPostCreated, onBack, userLanguage }) => {
     }
   };
 
+  const compressImage = (file) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const maxDim = 900;
+          let width = img.width;
+          let height = img.height;
+          if (width > height) {
+            if (width > maxDim) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            }
+          } else {
+            if (height > maxDim) {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.85));
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
   const handleCreatePost = async () => {
     if (!caption.trim() && !imageFile && !imagePreview) {
       toast.error(sm.emptyPostError || 'Write something or pick a photo before posting.');
@@ -45,24 +78,23 @@ const CreatePostScreen = ({ onPostCreated, onBack, userLanguage }) => {
     }
 
     setIsUploading(true);
-    let imageUrl = null;
+    let finalImageUrl = imagePreview;
 
     try {
       if (imageFile) {
         try {
-          imageUrl = await uploadImage(imageFile);
-        } catch (uploadErr) {
-          console.warn('Backend image upload fallback to base64 preview:', uploadErr);
-          imageUrl = imagePreview;
+          finalImageUrl = await compressImage(imageFile);
+        } catch (e) {
+          finalImageUrl = imagePreview;
         }
       }
 
-      await createPost(caption, imageUrl || imagePreview);
-      toast.success(sm.postSuccess || 'Photo posted successfully!');
-      onPostCreated();
+      await createPost(caption, finalImageUrl);
+      toast.success(sm.postSuccess || 'Photo posted permanently to Moments feed!');
+      if (onPostCreated) onPostCreated();
     } catch (error) {
       console.error('Error creating post:', error);
-      toast.error(sm.postError || 'Could not post photo. Please try again.');
+      toast.error(error.message || sm.postError || 'Could not post photo. Please try again.');
     } finally {
       setIsUploading(false);
     }
