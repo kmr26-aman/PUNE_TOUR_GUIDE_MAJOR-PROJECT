@@ -765,7 +765,7 @@ export default function ProfileScreen({ onPlaceSelect, userLocation, userLanguag
       {showEditProfileModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white p-6 rounded-3xl shadow-2xl w-full max-w-sm border border-gray-100">
-            <h2 className="text-lg font-black text-gray-900 mb-4">{t.profile.editProfileModal || "Edit Profile"}</h2>
+            <h2 className="text-lg font-black text-gray-900 mb-4">{t.editProfileModal || "Edit Profile"}</h2>
             
             <div className="space-y-3 mb-5">
               <div>
