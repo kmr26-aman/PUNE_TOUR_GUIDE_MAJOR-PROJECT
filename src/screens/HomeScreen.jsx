@@ -369,12 +369,12 @@ export default function HomeScreen({ onPlaceSelect, onSearchClick, userLocation,
     : "Today: Shaniwar Wada Walk (8 AM) • Goodluck Cafe (1 PM) • Dagdusheth Aarti (7 PM)";
 
   return (
-    <div className={`h-full w-full ${bgMain} flex flex-col overflow-y-auto pb-24 transition-colors duration-200 relative`}>
+    <div className={`h-full w-full min-h-0 ${bgMain} flex flex-col overflow-y-auto pb-28 transition-colors duration-200 relative`} style={{ height: "100%", overflowY: "auto" }}>
       <Toaster />
       <StatusBar light={!isDarkMode} />
 
       {/* Enhanced Hero Header Section */}
-      <div className="bg-gradient-to-br from-[#8B3A2A] via-[#742E20] to-[#5C2317] text-white p-4 pt-5 pb-5 relative overflow-hidden shadow-md">
+      <div className="bg-gradient-to-br from-[#8B3A2A] via-[#742E20] to-[#5C2317] text-white p-4 pt-5 pb-5 relative overflow-hidden shadow-md flex-shrink-0">
         <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-xl pointer-events-none" />
         <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-amber-500/10 rounded-full blur-xl pointer-events-none" />
 
@@ -528,7 +528,7 @@ export default function HomeScreen({ onPlaceSelect, onSearchClick, userLocation,
       </div>
 
       {/* 🎤 Voice + AI Search Bar (Positioned cleanly below Header without overlapping) */}
-      <div className="px-4 mt-3 relative z-20">
+      <div className="px-4 mt-3 relative z-10 flex-shrink-0">
         <div
           onClick={() => onSearchClick()}
           className={`${bgCard} p-3 rounded-2xl border shadow-md flex items-center gap-3 cursor-pointer group transition-all`}
@@ -548,7 +548,7 @@ export default function HomeScreen({ onPlaceSelect, onSearchClick, userLocation,
       </div>
 
       {/* 🧳 Recent Searches */}
-      <div className="px-4 mt-3 flex items-center gap-2 overflow-x-auto no-scrollbar">
+      <div className="px-4 mt-3 flex items-center gap-2 overflow-x-auto no-scrollbar flex-shrink-0">
         <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider whitespace-nowrap">Recent:</span>
         {RECENT_SEARCHES.map((search, idx) => (
           <button
@@ -564,7 +564,7 @@ export default function HomeScreen({ onPlaceSelect, onSearchClick, userLocation,
       </div>
 
       {/* ⚡ Quick Actions Grid */}
-      <div className="p-4 grid grid-cols-5 gap-2 text-center">
+      <div className="p-4 grid grid-cols-5 gap-2 text-center flex-shrink-0">
         <button
           onClick={() => onSearchClick({ category: "Nearby" })}
           className={`${bgCard} p-2.5 rounded-2xl border shadow-xs hover:border-[#8B3A2A] transition-all flex flex-col items-center gap-1`}
