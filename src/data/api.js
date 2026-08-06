@@ -536,6 +536,48 @@ export const getPopularPosts = async () => {
   return data;
 };
 
+export const deletePostApi = async (postId) => {
+  const response = await fetch(`${API_BASE_URL}/social/posts/${postId}`, {
+    method: 'DELETE',
+    headers: getHeaders(),
+  });
+  if (!response.ok) throw new Error('Failed to delete post');
+  clearApiCache('social:feed');
+  return response.json();
+};
+
+export const updatePostCaptionApi = async (postId, caption) => {
+  const response = await fetch(`${API_BASE_URL}/social/posts/${postId}/caption`, {
+    method: 'PUT',
+    headers: getHeaders(),
+    body: JSON.stringify({ caption }),
+  });
+  if (!response.ok) throw new Error('Failed to update caption');
+  clearApiCache('social:feed');
+  return response.json();
+};
+
+export const deleteCommentApi = async (commentId) => {
+  const response = await fetch(`${API_BASE_URL}/social/comments/${commentId}`, {
+    method: 'DELETE',
+    headers: getHeaders(),
+  });
+  if (!response.ok) throw new Error('Failed to delete comment');
+  clearApiCache('social:feed');
+  return response.json();
+};
+
+export const updateCommentApi = async (commentId, text) => {
+  const response = await fetch(`${API_BASE_URL}/social/comments/${commentId}`, {
+    method: 'PUT',
+    headers: getHeaders(),
+    body: JSON.stringify({ text }),
+  });
+  if (!response.ok) throw new Error('Failed to update comment');
+  clearApiCache('social:feed');
+  return response.json();
+};
+
 export const fetchUserActivity = async (userId) => {
   const cacheKey = `user:activity:${userId}`;
   const cached = getCached(cacheKey);

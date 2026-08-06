@@ -320,3 +320,107 @@ export const getPopularPosts = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ error: 'Failed to fetch popular posts' });
   }
 };
+
+export const deletePost = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+    const postId = Number(req.params.id);
+    if (isNaN(postId)) return res.status(400).json({ error: 'Invalid post ID' });
+
+    const post = await prisma.post.findUnique({ where: { id: postId } });
+    if (!post) return res.status(404).json({ error: 'Post not found' });
+
+    if (post.authorId !== req.user.id) {
+      return res.status(403).json({ error: 'You can only delete your own posts' });
+    }
+
+    await prisma.comment.deleteMany({ where: { postId } });
+    await prisma.like.deleteMany({ where: { postId } });
+    await prisma.post.delete({ where: { id: postId } });
+
+    await invalidateCache('social:feed');
+    res.json({ success: true, message: 'Post deleted successfully' });
+  } catch (error) {
+    console.error('Failed to delete post:', error);
+    res.status(500).json({ error: 'Failed to delete post' });
+  }
+};
+
+export const updateCaption = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+    const postId = Number(req.params.id);
+    const { caption } = req.body;
+    if (isNaN(postId)) return res.status(400).json({ error: 'Invalid post ID' });
+
+    const post = await prisma.post.findUnique({ where: { id: postId } });
+    if (!post) return res.status(404).json({ error: 'Post not found' });
+
+    if (post.authorId !== req.user.id) {
+      return res.status(403).json({ error: 'You can only edit your own post caption' });
+    }
+
+    const updatedPost = await prisma.post.update({
+      where: { id: postId },
+      data: { caption: caption || '' },
+      include: { author: { select: { id: true, name: true, avatarUrl: true } } }
+    });
+
+    await invalidateCache('social:feed');
+    res.json(updatedPost);
+  } catch (error) {
+    console.error('Failed to update caption:', error);
+    res.status(500).json({ error: 'Failed to update caption' });
+  }
+};
+
+export const deleteComment = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+    const commentId = Number(req.params.id);
+    if (isNaN(commentId)) return res.status(400).json({ error: 'Invalid comment ID' });
+
+    const comment = await prisma.comment.findUnique({
+      where: { id: commentId },
+      include: { post: { select: { authorId: true } } }
+    });
+    if (!comment) return res.status(404).json({ error: 'Comment not found' });
+
+    if (comment.userId !== req.user.id && comment.post?.authorId !== req.user.id) {
+      return res.status(403).json({ error: 'Permission denied to delete comment' });
+    }
+
+    await prisma.comment.delete({ where: { id: commentId } });
+    res.json({ success: true, message: 'Comment deleted successfully' });
+  } catch (error) {
+    console.error('Failed to delete comment:', error);
+    res.status(500).json({ error: 'Failed to delete comment' });
+  }
+};
+
+export const updateComment = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+    const commentId = Number(req.params.id);
+    const { text } = req.body;
+    if (isNaN(commentId)) return res.status(400).json({ error: 'Invalid comment ID' });
+
+    const comment = await prisma.comment.findUnique({ where: { id: commentId } });
+    if (!comment) return res.status(404).json({ error: 'Comment not found' });
+
+    if (comment.userId !== req.user.id) {
+      return res.status(403).json({ error: 'You can only edit your own comment' });
+    }
+
+    const updatedComment = await prisma.comment.update({
+      where: { id: commentId },
+      data: { text: text || '' },
+      include: { user: { select: { id: true, name: true } } }
+    });
+
+    res.json(updatedComment);
+  } catch (error) {
+    console.error('Failed to update comment:', error);
+    res.status(500).json({ error: 'Failed to update comment' });
+  }
+};
