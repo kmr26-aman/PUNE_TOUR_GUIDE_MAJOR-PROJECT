@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import StatusBar from "../components/StatusBar";
 import PlaceCard from "../components/PlaceCard";
+import SosModal from "../components/SosModal";
 import { categories } from "../data/puneData";
 import { fetchPlaces, fetchEvents } from "../data/api";
 import { translations } from "../data/translations";
@@ -811,6 +812,14 @@ export default function HomeScreen({ onPlaceSelect, onSearchClick, userLocation,
           </div>
         </div>
       )}
+
+      {/* 🚨 ROADSoS GLOBAL RESCUE & EMERGENCY NETWORK MODAL */}
+      <SosModal
+        isOpen={showSosModal}
+        onClose={() => setShowSosModal(false)}
+        userLocation={userLocation}
+        userLanguage={userLanguage}
+      />
 
       {/* 📅 DYNAMIC MONTH, DAY, YEAR REAL-TIME CALENDAR PLANNER MODAL */}
       {showPlanCalendarModal && (
