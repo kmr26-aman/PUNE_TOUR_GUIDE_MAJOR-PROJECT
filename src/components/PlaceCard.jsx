@@ -3,22 +3,12 @@ import { tagColorMap } from "../data/tokens";
 import { calculateDistance, formatDistance } from "../utils/location";
 import { Heart, Share2 } from "lucide-react";
 import toast from "react-hot-toast";
-
-const getPlacePhoto = (place) => {
-  if (place.imageUrl && place.imageUrl.startsWith("http")) return place.imageUrl;
-  const name = (place.name || "").toLowerCase();
-  if (name.includes("shaniwar")) return "https://images.unsplash.com/photo-1589308078059-be1415eab4c3?auto=format&fit=crop&w=400&q=80";
-  if (name.includes("aga khan")) return "https://images.unsplash.com/photo-1609828913647-7576722d36d2?auto=format&fit=crop&w=400&q=80";
-  if (name.includes("ganpati") || name.includes("dagdusheth")) return "https://images.unsplash.com/photo-1662446736466-9b57d079942a?auto=format&fit=crop&w=400&q=80";
-  if (name.includes("pataleshwar") || name.includes("cave")) return "https://images.unsplash.com/photo-1596895111956-bf1cf0599ce5?auto=format&fit=crop&w=400&q=80";
-  if (name.includes("sinhagad") || name.includes("fort")) return "https://images.unsplash.com/photo-1626014903708-ecb661d9a26a?auto=format&fit=crop&w=400&q=80";
-  return "https://images.unsplash.com/photo-1570168007204-dfb528c6958f?auto=format&fit=crop&w=400&q=80";
-};
+import { getSinglePlacePhoto } from "../utils/placeImages";
 
 const PlaceCard = memo(function PlaceCard({ place, onClick, userLocation, userLanguage }) {
   const [isFavorite, setIsFavorite] = useState(false);
   const tagStyle = tagColorMap[place.tagColor] || tagColorMap.terracotta;
-  const photoUrl = getPlacePhoto(place);
+  const photoUrl = getSinglePlacePhoto(place);
 
   const dynamicDistance = userLocation
     ? calculateDistance(userLocation.latitude, userLocation.longitude, place.latitude, place.longitude)

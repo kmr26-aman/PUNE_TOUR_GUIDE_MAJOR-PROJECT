@@ -3,37 +3,8 @@ import StatusBar from "../components/StatusBar";
 import { addStopToItinerary, toggleSavePlace, fetchItinerary } from "../data/api";
 import { calculateDistance, formatDistance } from "../utils/location";
 import { translations } from "../data/translations";
-import { Home, ArrowLeft, Heart, Image as ImageIcon, MapPin, Clock, Calendar, Phone } from "lucide-react";
-
-const getPlacePhotos = (place) => {
-  if (!place) return [];
-  if (place.imageUrl && place.imageUrl.startsWith("http")) {
-    return [place.imageUrl];
-  }
-  const name = (place.name || "").toLowerCase();
-  if (name.includes("shaniwar")) {
-    return [
-      "https://images.unsplash.com/photo-1589308078059-be1415eab4c3?auto=format&fit=crop&w=800&q=80",
-      "https://images.unsplash.com/photo-1570168007204-dfb528c6958f?auto=format&fit=crop&w=800&q=80"
-    ];
-  }
-  if (name.includes("aga khan")) {
-    return [
-      "https://images.unsplash.com/photo-1609828913647-7576722d36d2?auto=format&fit=crop&w=800&q=80",
-      "https://images.unsplash.com/photo-1589308078059-be1415eab4c3?auto=format&fit=crop&w=800&q=80"
-    ];
-  }
-  if (name.includes("ganpati") || name.includes("dagdusheth")) {
-    return [
-      "https://images.unsplash.com/photo-1662446736466-9b57d079942a?auto=format&fit=crop&w=800&q=80",
-      "https://images.unsplash.com/photo-1567157577867-05ccb1388e66?auto=format&fit=crop&w=800&q=80"
-    ];
-  }
-  return [
-    "https://images.unsplash.com/photo-1570168007204-dfb528c6958f?auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1589308078059-be1415eab4c3?auto=format&fit=crop&w=800&q=80"
-  ];
-};
+import { Home, ArrowLeft, Heart, Image as ImageIcon, MapPin, Clock, Calendar, Phone, Info, Compass, ShieldCheck } from "lucide-react";
+import { getPlacePhotoList } from "../utils/placeImages";
 
 export default function PlaceDetailScreen({ place, onBack, userLocation, userLanguage, onNavigateHome }) {
   const [isSaved, setIsSaved] = useState(place?.isSaved || false);
@@ -42,7 +13,7 @@ export default function PlaceDetailScreen({ place, onBack, userLocation, userLan
   if (!place) return null;
 
   const t = translations[userLanguage] || translations.English;
-  const photos = getPlacePhotos(place);
+  const photos = getPlacePhotoList(place);
 
   const dynamicDistance = userLocation
     ? calculateDistance(userLocation.latitude, userLocation.longitude, place.latitude, place.longitude)
@@ -291,10 +262,41 @@ export default function PlaceDetailScreen({ place, onBack, userLocation, userLan
           {userLanguage === "Marathi" && place.description_mr ? place.description_mr : place.description}
         </div>
 
+        {/* Key Highlights */}
+        {place.highlights && place.highlights.length > 0 && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: "#1C1412", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+              <span>✨</span>
+              <span>{userLanguage === "Marathi" ? "प्रमुख आकर्षणे" : "Key Highlights & Must See"}</span>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {place.highlights.map((h, i) => (
+                <div key={i} style={{ background: "#FBF8F3", padding: "8px 12px", borderRadius: 10, border: "1px solid #EDE8DF", fontSize: 11, fontWeight: 700, color: "#4A3E39", display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ color: "#8B3A2A" }}>•</span>
+                  <span>{h}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Best Time to Visit */}
+        {place.bestTimeToVisit && (
+          <div style={{ background: "#FEF3C7", border: "1.5px solid #F59E0B", padding: "10px 12px", borderRadius: 12, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 16 }}>⏰</span>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 800, color: "#92400E", textTransform: "uppercase" }}>
+                {userLanguage === "Marathi" ? "भेट देण्याची उत्तम वेळ" : "Best Time to Visit"}
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#78350F" }}>{place.bestTimeToVisit}</div>
+            </div>
+          </div>
+        )}
+
         {/* Info Rows */}
         <div style={{ background: "#FBF8F3", padding: 12, borderRadius: 16, border: "1px solid #EDE8DF", marginBottom: 20 }}>
           <InfoRow icon="🕐" text={place.hours} />
-          {place.phone !== "—" && (
+          {place.phone && place.phone !== "—" && (
             <a href={`tel:${place.phone}`} style={{ textDecoration: 'none' }}>
               <InfoRow icon="📞" text={place.phone} />
             </a>
