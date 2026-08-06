@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Heart, MessageCircle, Send, PlusCircle, Home, Sparkles, Filter } from 'lucide-react';
+import { Heart, MessageCircle, Send, PlusCircle, Home, Sparkles, Filter, Share2 } from 'lucide-react';
 import { getSocialFeed, addCommentToPost, togglePostLike, toggleFollowUser } from '../data/api';
 import { translations } from '../data/translations';
 import StatusBar from '../components/StatusBar';
@@ -186,7 +186,7 @@ const SocialMediaScreen = ({ userLanguage, onUserSelect, onPostSelect, onNavigat
   }
 
   return (
-    <div className="h-full w-full bg-[#FBF8F3] flex flex-col">
+    <div className="h-full w-full min-h-0 bg-[#FBF8F3] flex flex-col overflow-y-auto pb-28 transition-colors duration-200" style={{ height: "100%", overflowY: "auto" }}>
       <Toaster />
       <StatusBar />
       
@@ -337,6 +337,25 @@ const SocialMediaScreen = ({ userLanguage, onUserSelect, onPostSelect, onNavigat
                   <MessageCircle size={18} />
                   <span>{post.comments ? post.comments.length : 0}</span>
                 </div>
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (navigator.share) {
+                      navigator.share({
+                        title: "Pune Moment",
+                        text: post.caption || "Check out this Pune moment!",
+                        url: window.location.href,
+                      }).catch(console.error);
+                    } else {
+                      toast.success("Moment link copied!");
+                    }
+                  }}
+                  className="flex items-center gap-1.5 font-bold text-gray-600 hover:text-[#8B3A2A] transition-colors ml-auto"
+                >
+                  <Share2 size={18} />
+                  <span>Share</span>
+                </button>
               </div>
 
               {/* Comments Section */}

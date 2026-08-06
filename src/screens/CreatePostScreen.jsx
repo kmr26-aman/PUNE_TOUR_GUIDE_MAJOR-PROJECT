@@ -122,7 +122,7 @@ const CreatePostScreen = ({ onPostCreated, onBack, userLanguage }) => {
 
         <button
           onClick={handleCreatePost}
-          disabled={isUploading || (!caption.trim() && !imageFile)}
+          disabled={isUploading || (!caption.trim() && !imageFile && !imagePreview)}
           className="px-4 py-2 bg-[#8B3A2A] text-white text-xs font-bold rounded-xl hover:bg-opacity-90 disabled:opacity-50 transition-all flex items-center gap-1.5 shadow-sm"
         >
           {isUploading ? (
