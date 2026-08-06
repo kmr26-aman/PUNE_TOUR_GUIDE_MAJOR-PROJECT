@@ -8,6 +8,9 @@ import { createDefaultItineraryForUser } from './itineraryController';
 import { prisma } from '../app';
 const JWT_SECRET = process.env.JWT_SECRET || 'pune_tour_guide_secret_key';
 
+// In-memory OTP storage for password resets (10-minute expiry)
+const otpMap = new Map<string, { otp: string; expiresAt: number }>();
+
 export const registerUser = async (req: Request, res: Response) => {
   try {
     const { name, email, password } = req.body;
@@ -16,7 +19,9 @@ export const registerUser = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Name, email, and password are required' });
     }
 
-    const existingUser = await prisma.user.findUnique({ where: { email } });
+    const cleanEmail = email.toLowerCase().trim();
+
+    const existingUser = await prisma.user.findUnique({ where: { email: cleanEmail } });
     if (existingUser) {
       return res.status(400).json({ error: 'Email is already registered' });
     }
@@ -25,8 +30,8 @@ export const registerUser = async (req: Request, res: Response) => {
 
     const user = await prisma.user.create({
       data: {
-        name,
-        email,
+        name: name.trim(),
+        email: cleanEmail,
         password: hashedPassword,
         avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(name)}`,
         xp: 150 // Start with bonus sign-up XP!
@@ -66,13 +71,15 @@ export const loginUser = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const cleanEmail = email.toLowerCase().trim();
+
+    const user = await prisma.user.findUnique({ where: { email: cleanEmail } });
     if (!user) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
     if (!user.password) {
-      return res.status(400).json({ error: 'Account created with Google. Please use Continue with Google to log in.' });
+      return res.status(400).json({ error: 'Account created with Google. Click Forgot Password to set a password.' });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
@@ -95,6 +102,90 @@ export const loginUser = async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Login error:', error);
     res.status(500).json({ error: error?.message || 'Login failed' });
+  }
+};
+
+export const requestForgotPassword = async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body;
+    if (!email || !email.includes('@')) {
+      return res.status(400).json({ error: 'Valid email address is required' });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+    const user = await prisma.user.findUnique({ where: { email: cleanEmail } });
+
+    if (!user) {
+      return res.status(404).json({ error: 'No account registered with this email address' });
+    }
+
+    // Generate a 6-digit random OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+    otpMap.set(cleanEmail, { otp, expiresAt });
+
+    console.log(`[AUTH] Generated OTP ${otp} for ${cleanEmail}`);
+
+    res.status(200).json({
+      message: `OTP sent to ${cleanEmail}. Verification Code: ${otp}`,
+      otp: otp,
+    });
+  } catch (error: any) {
+    console.error('Request forgot password error:', error);
+    res.status(500).json({ error: error?.message || 'Failed to request OTP' });
+  }
+};
+
+export const resetPasswordWithOTP = async (req: Request, res: Response) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+
+    if (!email || !otp || !newPassword) {
+      return res.status(400).json({ error: 'Email, OTP, and new password are required' });
+    }
+
+    if (newPassword.length < 4) {
+      return res.status(400).json({ error: 'Password must be at least 4 characters long' });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+    const user = await prisma.user.findUnique({ where: { email: cleanEmail } });
+
+    if (!user) {
+      return res.status(404).json({ error: 'No account registered with this email address' });
+    }
+
+    const record = otpMap.get(cleanEmail);
+    if (!record) {
+      return res.status(400).json({ error: 'No OTP requested for this email. Please request OTP first.' });
+    }
+
+    if (Date.now() > record.expiresAt) {
+      otpMap.delete(cleanEmail);
+      return res.status(400).json({ error: 'OTP has expired. Please request a new code.' });
+    }
+
+    if (record.otp.trim() !== otp.trim()) {
+      return res.status(400).json({ error: 'Invalid OTP code. Please check and try again.' });
+    }
+
+    // Hash new password and update user record in database
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { password: hashedPassword },
+    });
+
+    // Delete OTP record
+    otpMap.delete(cleanEmail);
+
+    res.status(200).json({
+      message: 'Password reset successfully! Please sign in with your new password.',
+    });
+  } catch (error: any) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ error: error?.message || 'Failed to reset password' });
   }
 };
 

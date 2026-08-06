@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { loginUser, registerUser, googleAuthUser } from "../data/api";
+import { loginUser, registerUser, googleAuthUser, requestForgotPassword, resetPasswordWithOTP } from "../data/api";
 import StatusBar from "../components/StatusBar";
 
 const authTranslations = {
@@ -17,7 +17,7 @@ const authTranslations = {
     errorOccurred: "An error occurred. Please try again.",
     puneExplorer: "Pune Explorer",
     enterName: "Enter full name",
-    enterEmail: "Enter email",
+    enterEmail: "Enter email address",
     enterPassword: "Enter password",
     continueWithGoogle: "Continue with Google",
     googleSignIn: "Sign in with Google",
@@ -120,9 +120,20 @@ export default function AuthScreen({ onAuthSuccess, userLanguage, setUserLanguag
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Google Modal State
   const [showGoogleModal, setShowGoogleModal] = useState(false);
   const [googleEmail, setGoogleEmail] = useState("");
   const [googleName, setGoogleName] = useState("");
+
+  // Forgot Password / OTP State
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotStep, setForgotStep] = useState(1);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [forgotMsg, setForgotMsg] = useState("");
+  const [demoOtp, setDemoOtp] = useState("");
 
   const t = authTranslations[userLanguage] || authTranslations.English;
 
@@ -145,7 +156,6 @@ export default function AuthScreen({ onAuthSuccess, userLanguage, setUserLanguag
     try {
       setLoading(true);
       setError("");
-      // Decode JWT token payload from Google
       const base64Url = response.credential.split(".")[1];
       const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
       const jsonPayload = decodeURIComponent(
@@ -228,7 +238,6 @@ export default function AuthScreen({ onAuthSuccess, userLanguage, setUserLanguag
           return;
         }
         await registerUser(name, email, password);
-        // User record is saved in Neon PostgreSQL DB. Now prompt user to sign in!
         setIsLogin(true);
         setPassword("");
         const successMsg =
@@ -240,6 +249,64 @@ export default function AuthScreen({ onAuthSuccess, userLanguage, setUserLanguag
     } catch (err) {
       console.error("Authentication error:", err);
       setError(err.message || t.errorOccurred);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOpenForgotModal = () => {
+    setForgotEmail(email || "");
+    setOtpCode("");
+    setNewPassword("");
+    setForgotMsg("");
+    setDemoOtp("");
+    setForgotStep(1);
+    setShowForgotModal(true);
+  };
+
+  const handleRequestOtp = async (e) => {
+    e.preventDefault();
+    if (!forgotEmail || !forgotEmail.includes("@")) {
+      setForgotMsg("❌ Please enter a valid email address.");
+      return;
+    }
+    setLoading(true);
+    setForgotMsg("");
+    try {
+      const res = await requestForgotPassword(forgotEmail);
+      if (res.otp) setDemoOtp(res.otp);
+      setForgotStep(2);
+      setForgotMsg(res.message || "OTP code sent to your email!");
+    } catch (err) {
+      console.error("Request OTP error:", err);
+      setForgotMsg(`❌ ${err.message || "Failed to send OTP code"}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    if (!otpCode || !newPassword) {
+      setForgotMsg("❌ Please enter both the 6-digit OTP code and your new password.");
+      return;
+    }
+    if (newPassword.length < 4) {
+      setForgotMsg("❌ Password must be at least 4 characters long.");
+      return;
+    }
+    setLoading(true);
+    setForgotMsg("");
+    try {
+      const res = await resetPasswordWithOTP(forgotEmail, otpCode, newPassword);
+      setShowForgotModal(false);
+      setIsLogin(true);
+      setEmail(forgotEmail);
+      setPassword("");
+      setError(`✅ ${res.message || "Password reset successfully! Please sign in with your new password."}`);
+    } catch (err) {
+      console.error("Reset password error:", err);
+      setForgotMsg(`❌ ${err.message || "Invalid OTP code or reset failed"}`);
     } finally {
       setLoading(false);
     }
@@ -287,6 +354,7 @@ export default function AuthScreen({ onAuthSuccess, userLanguage, setUserLanguag
 
       {/* Form Card */}
       <div style={{ background: "#fff", padding: 20, borderRadius: 20, border: "1px solid #EDE8DF", boxShadow: "0 6px 20px rgba(0,0,0,0.02)" }}>
+        
         {/* Google Auth Button */}
         <button
           type="button"
@@ -310,7 +378,6 @@ export default function AuthScreen({ onAuthSuccess, userLanguage, setUserLanguag
             transition: "background 0.2s, box-shadow 0.2s"
           }}
         >
-          {/* Official Google G Logo SVG */}
           <svg width="18" height="18" viewBox="0 0 24 24">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
             <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
@@ -356,8 +423,13 @@ export default function AuthScreen({ onAuthSuccess, userLanguage, setUserLanguag
         </div>
 
         {error && (
-          <div style={{ background: "#FDF2F2", color: "#DE350B", padding: "10px 12px", borderRadius: 10, fontSize: 11, fontWeight: 600, marginBottom: 14, border: "1px solid #FAD2D2" }}>
-            ⚠️ {error}
+          <div style={{
+            background: error.includes("✅") ? "#F0FDF4" : "#FDF2F2",
+            color: error.includes("✅") ? "#15803D" : "#DE350B",
+            padding: "10px 12px", borderRadius: 10, fontSize: 11, fontWeight: 600, marginBottom: 14,
+            border: "1px solid", borderColor: error.includes("✅") ? "#BBF7D0" : "#FAD2D2"
+          }}>
+            {error.includes("✅") ? error : `⚠️ ${error}`}
           </div>
         )}
 
@@ -406,6 +478,20 @@ export default function AuthScreen({ onAuthSuccess, userLanguage, setUserLanguag
                 fontSize: 13, outline: "none", background: "#FBF8F3", fontFamily: "inherit"
               }}
             />
+            {isLogin && (
+              <div style={{ textAlign: "right", marginTop: 6 }}>
+                <button
+                  type="button"
+                  onClick={handleOpenForgotModal}
+                  style={{
+                    background: "none", border: "none", color: "#8B3A2A",
+                    fontSize: 11, fontWeight: 700, cursor: "pointer", padding: 0
+                  }}
+                >
+                  Forgot Password? 🔑
+                </button>
+              </div>
+            )}
           </div>
 
           <button
@@ -524,6 +610,129 @@ export default function AuthScreen({ onAuthSuccess, userLanguage, setUserLanguag
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Forgot Password & OTP Modal */}
+      {showForgotModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 120, padding: 16 }}>
+          <div style={{ background: "#fff", width: "100%", maxWidth: 360, borderRadius: 24, padding: 24, boxShadow: "0 16px 40px rgba(0,0,0,0.25)", position: "relative" }}>
+            <button
+              onClick={() => setShowForgotModal(false)}
+              style={{ position: "absolute", top: 16, right: 16, border: "none", background: "#F2EAE7", width: 28, height: 28, borderRadius: "50%", cursor: "pointer", color: "#8B3A2A", fontWeight: "bold" }}
+            >
+              ✕
+            </button>
+
+            <div style={{ textAlign: "center", marginBottom: 16 }}>
+              <div style={{ width: 48, height: 48, borderRadius: "50%", background: "#F2EAE7", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 10px", fontSize: 24 }}>
+                🔑
+              </div>
+              <h3 style={{ fontSize: 17, fontWeight: 800, color: "#1C1412", margin: 0 }}>Reset Password</h3>
+              <p style={{ fontSize: 11, color: "#6B5B52", marginTop: 4 }}>
+                {forgotStep === 1
+                  ? "Enter your registered email ID to receive a 6-digit OTP code."
+                  : `Enter the OTP sent to ${forgotEmail} & choose a new password.`}
+              </p>
+            </div>
+
+            {forgotMsg && (
+              <div style={{
+                background: forgotMsg.includes("❌") ? "#FDF2F2" : "#F0FDF4",
+                color: forgotMsg.includes("❌") ? "#DE350B" : "#15803D",
+                padding: "8px 12px", borderRadius: 10, fontSize: 11, fontWeight: 700, marginBottom: 12, border: "1px solid",
+                borderColor: forgotMsg.includes("❌") ? "#FAD2D2" : "#BBF7D0"
+              }}>
+                {forgotMsg}
+              </div>
+            )}
+
+            {demoOtp && forgotStep === 2 && (
+              <div style={{ background: "#FEF3C7", border: "1.5px solid #F59E0B", color: "#92400E", padding: "8px 12px", borderRadius: 12, fontSize: 12, fontWeight: 800, textAlign: "center", marginBottom: 14 }}>
+                ✉️ OTP Verification Code: <span style={{ letterSpacing: 3, fontSize: 16, fontWeight: 900, textDecoration: "underline" }}>{demoOtp}</span>
+              </div>
+            )}
+
+            {forgotStep === 1 ? (
+              <form onSubmit={handleRequestOtp} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#6B5B52", marginBottom: 4 }}>Your Registered Email Address</div>
+                  <input
+                    type="email"
+                    placeholder="name@example.com"
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    required
+                    style={{
+                      width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #EDE8DF",
+                      fontSize: 13, outline: "none", background: "#FBF8F3", fontFamily: "inherit"
+                    }}
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  style={{
+                    width: "100%", padding: "12px", borderRadius: 12, border: "none",
+                    background: "#8B3A2A", color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 13,
+                    boxShadow: "0 4px 10px rgba(139,58,42,0.2)"
+                  }}
+                >
+                  {loading ? "Sending OTP..." : "Send OTP Verification Code 📩"}
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleResetPassword} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#6B5B52", marginBottom: 4 }}>6-Digit OTP Code</div>
+                  <input
+                    type="text"
+                    placeholder="Enter 6-digit OTP"
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value)}
+                    required
+                    maxLength={6}
+                    style={{
+                      width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #EDE8DF",
+                      fontSize: 14, fontWeight: 800, letterSpacing: 2, outline: "none", background: "#FBF8F3", textTransform: "uppercase"
+                    }}
+                  />
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#6B5B52", marginBottom: 4 }}>New Password</div>
+                  <input
+                    type="password"
+                    placeholder="Enter new password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    required
+                    style={{
+                      width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #EDE8DF",
+                      fontSize: 13, outline: "none", background: "#FBF8F3", fontFamily: "inherit"
+                    }}
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  style={{
+                    width: "100%", padding: "12px", borderRadius: 12, border: "none",
+                    background: "#15803D", color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 13,
+                    boxShadow: "0 4px 10px rgba(21,128,61,0.2)"
+                  }}
+                >
+                  {loading ? "Resetting..." : "Verify OTP & Update Password ✅"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForgotStep(1)}
+                  style={{ background: "none", border: "none", color: "#6B5B52", fontSize: 11, cursor: "pointer", marginTop: 4 }}
+                >
+                  ← Resend OTP or change email
+                </button>
+              </form>
+            )}
           </div>
         </div>
       )}

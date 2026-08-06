@@ -162,6 +162,46 @@ export const googleAuthUser = async (googleData) => {
   }
 };
 
+export const requestForgotPassword = async (email) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/user/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+
+    if (!response.ok) {
+      throw await parseErrorResponse(response, 'Failed to request OTP');
+    }
+    return response.json();
+  } catch (err) {
+    if (err.name === 'TypeError' && err.message.includes('fetch')) {
+      throw new Error('Unable to connect to server. Please check your network connection.');
+    }
+    throw err;
+  }
+};
+
+export const resetPasswordWithOTP = async (email, otp, newPassword) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/user/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, otp, newPassword })
+    });
+
+    if (!response.ok) {
+      throw await parseErrorResponse(response, 'Failed to reset password');
+    }
+    return response.json();
+  } catch (err) {
+    if (err.name === 'TypeError' && err.message.includes('fetch')) {
+      throw new Error('Unable to connect to server. Please check your network connection.');
+    }
+    throw err;
+  }
+};
+
 export const fetchUserMe = async () => {
   const response = await fetch(`${API_BASE_URL}/user/me`, {
     headers: getHeaders(),
