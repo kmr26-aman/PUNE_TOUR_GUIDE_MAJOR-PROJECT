@@ -70,8 +70,20 @@ export default function SosModal({ isOpen, onClose, userLocation, userLanguage }
   const [bloodGroup, setBloodGroup] = useState(() => localStorage.getItem("pune_user_blood_group") || "O+");
   const [emergencyContactName, setEmergencyContactName] = useState(() => localStorage.getItem("pune_user_em_name") || "");
   const [emergencyContactPhone, setEmergencyContactPhone] = useState(() => localStorage.getItem("pune_user_em_phone") || "");
+  const [emergencyContactPhone2, setEmergencyContactPhone2] = useState(() => localStorage.getItem("pune_user_em_phone2") || "");
   const [medicalNotes, setMedicalNotes] = useState(() => localStorage.getItem("pune_user_med_notes") || "");
   const [isCopied, setIsCopied] = useState(false);
+
+  // Sync Emergency Profile from LocalStorage whenever modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setBloodGroup(localStorage.getItem("pune_user_blood_group") || "O+");
+      setEmergencyContactName(localStorage.getItem("pune_user_em_name") || "");
+      setEmergencyContactPhone(localStorage.getItem("pune_user_em_phone") || "");
+      setEmergencyContactPhone2(localStorage.getItem("pune_user_em_phone2") || "");
+      setMedicalNotes(localStorage.getItem("pune_user_med_notes") || "");
+    }
+  }, [isOpen]);
 
   // Save Medical Profile
   const handleSaveMedicalProfile = (e) => {
@@ -79,6 +91,7 @@ export default function SosModal({ isOpen, onClose, userLocation, userLanguage }
     localStorage.setItem("pune_user_blood_group", bloodGroup);
     localStorage.setItem("pune_user_em_name", emergencyContactName);
     localStorage.setItem("pune_user_em_phone", emergencyContactPhone);
+    localStorage.setItem("pune_user_em_phone2", emergencyContactPhone2);
     localStorage.setItem("pune_user_med_notes", medicalNotes);
     toast.success("Emergency Medical Profile saved locally! 🛡️");
   };
@@ -101,7 +114,14 @@ export default function SosModal({ isOpen, onClose, userLocation, userLanguage }
       setIsEmergencyTriggered(true);
       setCountdown(null);
       if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 800]);
-      toast.error("🚨 EMERGENCY DISPATCH ACTIVATED! Broadcast sent.", { duration: 6000 });
+      
+      // Auto-open WhatsApp / SMS emergency alert to primary emergency contact if set
+      if (emergencyContactPhone) {
+        const message = encodeURIComponent(`🚨 EMERGENCY ROAD SOS ALERT 🚨\nI need immediate rescue assistance!\nLive Location: ${userLocation?.address || "Pune"}\nGPS: ${userLocation?.latitude || 18.5204}, ${userLocation?.longitude || 73.8567}\nGoogle Maps: https://maps.google.com/?q=${userLocation?.latitude || 18.5204},${userLocation?.longitude || 73.8567}\nBlood Group: ${bloodGroup}\nMedical Notes: ${medicalNotes || "None"}`);
+        window.open(`https://api.whatsapp.com/send?phone=${emergencyContactPhone.replace(/[^0-9]/g, '')}&text=${message}`, "_blank");
+      }
+
+      toast.error("🚨 EMERGENCY DISPATCH ACTIVATED! Alert sent to your emergency contact.", { duration: 6000 });
     }
   }, [countdown]);
 
@@ -269,6 +289,46 @@ export default function SosModal({ isOpen, onClose, userLocation, userLanguage }
                   </button>
                 </div>
               </div>
+
+              {/* Personal Emergency Contact Card (Saved in Profile) */}
+              {emergencyContactPhone && (
+                <div style={{ background: "#FEF2F2", border: "1.5px solid #FCA5A5", borderRadius: 16, padding: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                    <span style={{ fontSize: 10, fontWeight: 900, color: "#DC2626", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                      🚨 Personal Emergency Contact
+                    </span>
+                    <span style={{ fontSize: 9, fontWeight: 800, color: "#991B1B", background: "#FEE2E2", padding: "2px 6px", borderRadius: 6 }}>
+                      SAVED IN PROFILE
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 900, color: "#1C1412" }}>
+                    {emergencyContactName || "Emergency Contact"}: <span style={{ color: "#DC2626" }}>{emergencyContactPhone}</span>
+                  </div>
+                  {emergencyContactPhone2 && (
+                    <div style={{ fontSize: 11, color: "#6B5B52", fontWeight: 700, marginTop: 2 }}>
+                      Alt Contact: {emergencyContactPhone2}
+                    </div>
+                  )}
+
+                  <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                    <a
+                      href={`tel:${emergencyContactPhone}`}
+                      style={{ flex: 1, padding: "8px", background: "#DC2626", color: "#fff", borderRadius: 10, fontSize: 11, fontWeight: 800, textDecoration: "none", textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}
+                    >
+                      <Phone size={14} /> Call Contact
+                    </a>
+                    <button
+                      onClick={() => {
+                        const message = encodeURIComponent(`🚨 EMERGENCY ROAD SOS ALERT! I need immediate rescue assistance.\nLive Location: ${address}\nGPS: ${lat.toFixed(5)}, ${lng.toFixed(5)}\nGoogle Maps: https://maps.google.com/?q=${lat},${lng}\nBlood Group: ${bloodGroup}\nMedical Notes: ${medicalNotes || "None"}`);
+                        window.open(`https://api.whatsapp.com/send?phone=${emergencyContactPhone.replace(/[^0-9]/g, '')}&text=${message}`, "_blank");
+                      }}
+                      style={{ flex: 1, padding: "8px", background: "#25D366", color: "#fff", border: "none", borderRadius: 10, fontSize: 11, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}
+                    >
+                      <span>WhatsApp Alert 💬</span>
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* One-Tap Emergency Helpline Call Grid */}
               <div>

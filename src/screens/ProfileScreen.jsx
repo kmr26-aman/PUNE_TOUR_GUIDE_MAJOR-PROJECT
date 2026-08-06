@@ -50,6 +50,29 @@ export default function ProfileScreen({ onPlaceSelect, userLocation, userLanguag
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [cacheCleared, setCacheCleared] = useState(false);
 
+  // ROADSoS Emergency Contacts & Medical Details State
+  const [emContactName, setEmContactName] = useState(() => localStorage.getItem("pune_user_em_name") || "");
+  const [emContactPhone, setEmContactPhone] = useState(() => localStorage.getItem("pune_user_em_phone") || "");
+  const [emContactPhone2, setEmContactPhone2] = useState(() => localStorage.getItem("pune_user_em_phone2") || "");
+  const [emBloodGroup, setEmBloodGroup] = useState(() => localStorage.getItem("pune_user_blood_group") || "O+");
+  const [emMedicalNotes, setEmMedicalNotes] = useState(() => localStorage.getItem("pune_user_med_notes") || "");
+  const [emAutoAlert, setEmAutoAlert] = useState(() => localStorage.getItem("pune_user_em_auto_alert") !== "false");
+
+  const handleSaveEmergencyDetails = (e) => {
+    e.preventDefault();
+    if (!emContactPhone || emContactPhone.trim().length < 8) {
+      toast.error("Please enter a valid Emergency Contact phone number!");
+      return;
+    }
+    localStorage.setItem("pune_user_em_name", emContactName.trim());
+    localStorage.setItem("pune_user_em_phone", emContactPhone.trim());
+    localStorage.setItem("pune_user_em_phone2", emContactPhone2.trim());
+    localStorage.setItem("pune_user_blood_group", emBloodGroup);
+    localStorage.setItem("pune_user_med_notes", emMedicalNotes.trim());
+    localStorage.setItem("pune_user_em_auto_alert", emAutoAlert ? "true" : "false");
+    toast.success("🚨 Emergency Contacts & ROADSoS Medical Profile Saved!");
+  };
+
   const t = translations[userLanguage] || translations.English;
 
   const user = {
@@ -261,20 +284,30 @@ export default function ProfileScreen({ onPlaceSelect, userLocation, userLanguag
       </div>
 
       {/* Feature Menu Sub-Tabs */}
-      <div className={`flex border-b ${bgCard} sticky top-[57px] z-10 shadow-xs`}>
+      <div className={`flex border-b ${bgCard} sticky top-[57px] z-10 shadow-xs overflow-x-auto no-scrollbar`}>
         <button
           onClick={() => setActiveMenuTab("stats")}
-          className={`flex-1 py-3 text-xs font-extrabold border-b-2 flex items-center justify-center gap-1 transition-all ${
+          className={`flex-1 py-3 text-xs font-extrabold border-b-2 flex items-center justify-center gap-1 transition-all whitespace-nowrap px-3 ${
             activeMenuTab === "stats" ? "border-[#8B3A2A] text-[#8B3A2A] bg-[#8B3A2A]/5" : "border-transparent text-gray-500"
           }`}
         >
           <Award size={15} />
-          <span>Stats & Badges</span>
+          <span>Stats</span>
+        </button>
+
+        <button
+          onClick={() => setActiveMenuTab("sos")}
+          className={`flex-1 py-3 text-xs font-extrabold border-b-2 flex items-center justify-center gap-1 transition-all whitespace-nowrap px-3 ${
+            activeMenuTab === "sos" ? "border-rose-600 text-rose-600 bg-rose-50 dark:bg-rose-950/20" : "border-transparent text-rose-600/80"
+          }`}
+        >
+          <ShieldAlert size={15} className="animate-pulse" />
+          <span>ROADSoS Contacts 🚨</span>
         </button>
 
         <button
           onClick={() => setActiveMenuTab("media")}
-          className={`flex-1 py-3 text-xs font-extrabold border-b-2 flex items-center justify-center gap-1 transition-all ${
+          className={`flex-1 py-3 text-xs font-extrabold border-b-2 flex items-center justify-center gap-1 transition-all whitespace-nowrap px-3 ${
             activeMenuTab === "media" ? "border-[#8B3A2A] text-[#8B3A2A] bg-[#8B3A2A]/5" : "border-transparent text-gray-500"
           }`}
         >
@@ -284,17 +317,17 @@ export default function ProfileScreen({ onPlaceSelect, userLocation, userLanguag
 
         <button
           onClick={() => setActiveMenuTab("wallet")}
-          className={`flex-1 py-3 text-xs font-extrabold border-b-2 flex items-center justify-center gap-1 transition-all ${
+          className={`flex-1 py-3 text-xs font-extrabold border-b-2 flex items-center justify-center gap-1 transition-all whitespace-nowrap px-3 ${
             activeMenuTab === "wallet" ? "border-[#8B3A2A] text-[#8B3A2A] bg-[#8B3A2A]/5" : "border-transparent text-gray-500"
           }`}
         >
           <Wallet size={15} />
-          <span>Wallet & Passes</span>
+          <span>Wallet</span>
         </button>
 
         <button
           onClick={() => setActiveMenuTab("settings")}
-          className={`flex-1 py-3 text-xs font-extrabold border-b-2 flex items-center justify-center gap-1 transition-all ${
+          className={`flex-1 py-3 text-xs font-extrabold border-b-2 flex items-center justify-center gap-1 transition-all whitespace-nowrap px-3 ${
             activeMenuTab === "settings" ? "border-[#8B3A2A] text-[#8B3A2A] bg-[#8B3A2A]/5" : "border-transparent text-gray-500"
           }`}
         >
@@ -302,6 +335,120 @@ export default function ProfileScreen({ onPlaceSelect, userLocation, userLanguag
           <span>Settings</span>
         </button>
       </div>
+
+      {/* Tab Content: ROADSoS Emergency Contacts & Medical Profile */}
+      {activeMenuTab === "sos" && (
+        <div className="p-4 space-y-4">
+          <div className="bg-gradient-to-br from-rose-600 via-rose-700 to-[#8B3A2A] text-white p-4 rounded-2xl shadow-md border border-rose-800">
+            <div className="flex items-center gap-2.5 mb-2">
+              <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white font-black">
+                🚨
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-white">ROADSoS Emergency Dispatch Profile</h3>
+                <p className="text-[11px] text-rose-100 font-medium">Automatic Live Location & Emergency Broadcast Setup</p>
+              </div>
+            </div>
+            <p className="text-xs text-white/90 leading-relaxed mt-2 bg-black/20 p-2.5 rounded-xl border border-white/10">
+              When SOS is activated on the Home tab or via Shake-to-SOS, your live GPS coordinates, Google Maps pin link, blood group, and medical notes will be automatically dispatched to these contacts.
+            </p>
+          </div>
+
+          <form onSubmit={handleSaveEmergencyDetails} className={`${bgCard} p-4 rounded-2xl border shadow-sm space-y-3.5`}>
+            <div className="flex items-center gap-2 border-b border-gray-200 dark:border-gray-700 pb-2">
+              <ShieldAlert size={18} className="text-rose-600" />
+              <h4 className={`text-xs font-black uppercase tracking-wider ${textTitle}`}>Primary Emergency Contact</h4>
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-gray-600 dark:text-gray-300 block mb-1">Contact Person Name</label>
+              <input
+                type="text"
+                placeholder="e.g. Parent / Spouse / Guardian Name"
+                value={emContactName}
+                onChange={(e) => setEmContactName(e.target.value)}
+                required
+                className={`w-full p-2.5 rounded-xl border text-xs outline-none ${isDarkMode ? 'bg-[#2D2522] border-gray-700 text-white' : 'bg-[#FBF8F3] border-gray-300 text-gray-900'}`}
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-gray-600 dark:text-gray-300 block mb-1">Primary Emergency Phone Number</label>
+              <input
+                type="tel"
+                placeholder="+91 98765 43210"
+                value={emContactPhone}
+                onChange={(e) => setEmContactPhone(e.target.value)}
+                required
+                className={`w-full p-2.5 rounded-xl border text-xs font-bold outline-none ${isDarkMode ? 'bg-[#2D2522] border-gray-700 text-white' : 'bg-[#FBF8F3] border-gray-300 text-gray-900'}`}
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-gray-600 dark:text-gray-300 block mb-1">Secondary Emergency Phone Number (Optional)</label>
+              <input
+                type="tel"
+                placeholder="+91 91234 56789"
+                value={emContactPhone2}
+                onChange={(e) => setEmContactPhone2(e.target.value)}
+                className={`w-full p-2.5 rounded-xl border text-xs outline-none ${isDarkMode ? 'bg-[#2D2522] border-gray-700 text-white' : 'bg-[#FBF8F3] border-gray-300 text-gray-900'}`}
+              />
+            </div>
+
+            <div className="flex items-center gap-2 border-b border-gray-200 dark:border-gray-700 pb-2 pt-2">
+              <Activity size={18} className="text-rose-600" />
+              <h4 className={`text-xs font-black uppercase tracking-wider ${textTitle}`}>Medical ID & Allergies</h4>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-bold text-gray-600 dark:text-gray-300 block mb-1">Blood Group</label>
+                <select
+                  value={emBloodGroup}
+                  onChange={(e) => setEmBloodGroup(e.target.value)}
+                  className={`w-full p-2.5 rounded-xl border text-xs font-black outline-none ${isDarkMode ? 'bg-[#2D2522] border-gray-700 text-white' : 'bg-[#FBF8F3] border-gray-300 text-gray-900'}`}
+                >
+                  {["O+", "O-", "A+", "A-", "B+", "B-", "AB+", "AB-"].map(bg => (
+                    <option key={bg} value={bg}>{bg}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-gray-600 dark:text-gray-300 block mb-1">Auto-Alert Emergency Contact</label>
+                <div
+                  onClick={() => setEmAutoAlert(!emAutoAlert)}
+                  className={`p-2.5 rounded-xl border cursor-pointer flex items-center justify-between text-xs font-bold ${
+                    emAutoAlert ? 'bg-emerald-500/10 border-emerald-500 text-emerald-700 dark:text-emerald-300' : 'bg-gray-100 dark:bg-gray-800 border-gray-300 text-gray-500'
+                  }`}
+                >
+                  <span>{emAutoAlert ? "ON (Auto SMS/WA)" : "OFF"}</span>
+                  <span>{emAutoAlert ? "✅" : "⚪"}</span>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-gray-600 dark:text-gray-300 block mb-1">Medical Conditions / Allergies / Notes</label>
+              <textarea
+                rows={2}
+                placeholder="e.g. Asthma, Diabetic, Allergic to Penicillin, Wears Lenses"
+                value={emMedicalNotes}
+                onChange={(e) => setEmMedicalNotes(e.target.value)}
+                className={`w-full p-2.5 rounded-xl border text-xs outline-none resize-none ${isDarkMode ? 'bg-[#2D2522] border-gray-700 text-white' : 'bg-[#FBF8F3] border-gray-300 text-gray-900'}`}
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full bg-rose-600 hover:bg-rose-700 text-white py-3 rounded-xl font-black text-xs shadow-md active:scale-95 transition-all flex items-center justify-center gap-2"
+            >
+              <ShieldCheck size={16} />
+              <span>Save ROADSoS Emergency Contacts 🛡️</span>
+            </button>
+          </form>
+        </div>
+      )}
 
       {/* Tab Content 1: Stats, Badges & AI Diary */}
       {activeMenuTab === "stats" && (
