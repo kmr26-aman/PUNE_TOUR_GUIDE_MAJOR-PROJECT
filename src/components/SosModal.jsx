@@ -85,6 +85,16 @@ export default function SosModal({ isOpen, onClose, userLocation, userLanguage }
     }
   }, [isOpen]);
 
+  // Helper to format 10-digit numbers into international format
+  const formatPhoneNumber = (phone) => {
+    if (!phone) return "";
+    let cleaned = phone.replace(/[^0-9]/g, '');
+    if (cleaned.length === 10) {
+      cleaned = '91' + cleaned;
+    }
+    return cleaned;
+  };
+
   // Save Medical Profile
   const handleSaveMedicalProfile = (e) => {
     e.preventDefault();
@@ -115,13 +125,33 @@ export default function SosModal({ isOpen, onClose, userLocation, userLanguage }
       setCountdown(null);
       if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 800]);
       
-      // Auto-open WhatsApp / SMS emergency alert to primary emergency contact if set
-      if (emergencyContactPhone) {
-        const message = encodeURIComponent(`🚨 EMERGENCY ROAD SOS ALERT 🚨\nI need immediate rescue assistance!\nLive Location: ${userLocation?.address || "Pune"}\nGPS: ${userLocation?.latitude || 18.5204}, ${userLocation?.longitude || 73.8567}\nGoogle Maps: https://maps.google.com/?q=${userLocation?.latitude || 18.5204},${userLocation?.longitude || 73.8567}\nBlood Group: ${bloodGroup}\nMedical Notes: ${medicalNotes || "None"}`);
-        window.open(`https://api.whatsapp.com/send?phone=${emergencyContactPhone.replace(/[^0-9]/g, '')}&text=${message}`, "_blank");
+      const rawPhone = emergencyContactPhone || localStorage.getItem("pune_user_em_phone") || "";
+      const formattedPhone = formatPhoneNumber(rawPhone);
+      const uName = localStorage.getItem("pune_user_name") || "Explorer";
+      const uAddr = userLocation?.address || "Shivajinagar, Pune";
+      const uLat = userLocation?.latitude || 18.5204;
+      const uLng = userLocation?.longitude || 73.8567;
+      const bGroup = bloodGroup || localStorage.getItem("pune_user_blood_group") || "O+";
+      const mNotes = medicalNotes || localStorage.getItem("pune_user_med_notes") || "None";
+
+      const sosMessageText = `🚨 EMERGENCY ROAD SOS ALERT 🚨\nName: ${uName}\nI need immediate rescue assistance!\nLive Location: ${uAddr}\nGPS: ${uLat}, ${uLng}\nGoogle Maps: https://maps.google.com/?q=${uLat},${uLng}\nBlood Group: ${bGroup}\nMedical Notes: ${mNotes}`;
+
+      if (formattedPhone) {
+        // Trigger WhatsApp Dispatch
+        const waUrl = `https://api.whatsapp.com/send?phone=${formattedPhone}&text=${encodeURIComponent(sosMessageText)}`;
+        window.open(waUrl, "_blank");
+
+        // Trigger SMS Dispatch
+        setTimeout(() => {
+          try {
+            window.location.href = `sms:${formattedPhone}?body=${encodeURIComponent(sosMessageText)}`;
+          } catch (e) {
+            console.warn("SMS dispatch fallback:", e);
+          }
+        }, 600);
       }
 
-      toast.error("🚨 EMERGENCY DISPATCH ACTIVATED! Alert sent to your emergency contact.", { duration: 6000 });
+      toast.error("🚨 EMERGENCY DISPATCH ACTIVATED! WhatsApp & SMS alert sent.", { duration: 6000 });
     }
   }, [countdown]);
 

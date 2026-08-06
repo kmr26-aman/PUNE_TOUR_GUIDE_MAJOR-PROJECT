@@ -147,7 +147,7 @@ export default function ProfileScreen({ onPlaceSelect, userLocation, userLanguag
   const textMuted = isDarkMode ? "text-gray-400" : "text-gray-500";
 
   return (
-    <div className={`h-full w-full ${bgMain} flex flex-col overflow-y-auto transition-colors duration-200`}>
+    <div className={`h-full w-full ${bgMain} flex flex-col overflow-y-auto pb-24 transition-colors duration-200`}>
       <Toaster />
       <StatusBar light={isDarkMode} />
 

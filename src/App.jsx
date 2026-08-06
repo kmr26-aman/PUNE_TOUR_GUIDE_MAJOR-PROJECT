@@ -5,10 +5,10 @@ import AuthScreen from "./screens/AuthScreen";
 import { useUserLocation } from "./hooks/useUserLocation";
 import { logoutUser, fetchWeather, fetchUserMe } from "./data/api";
 
+import ProfileScreen from "./screens/ProfileScreen";
 const ExploreScreen = lazy(() => import("./screens/ExploreScreen"));
 const MapScreen = lazy(() => import("./screens/MapScreen"));
 const PlanScreen = lazy(() => import("./screens/PlanScreen"));
-const ProfileScreen = lazy(() => import("./screens/ProfileScreen"));
 const SocialMediaScreen = lazy(() => import("./screens/SocialMediaScreen.jsx"));
 const PlaceDetailScreen = lazy(() => import("./screens/PlaceDetailScreen.jsx"));
 const UserProfileScreen = lazy(() => import("./screens/userProfileScreen.jsx"));
