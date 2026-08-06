@@ -7,7 +7,8 @@ import {
   Home, Edit, Heart, CheckCircle, Award, LogOut, User, Mail, ShieldCheck, 
   Globe, Bell, HardDrive, HelpCircle, FileText, Sparkles, ChevronRight, X, 
   Moon, Sun, QrCode, Share2, MapPin, Bookmark, Camera, Video, Compass, 
-  Wallet, Ticket, Users, Lock, AlertTriangle, Trash2, Star, BookOpen, Film
+  Wallet, Ticket, Users, Lock, AlertTriangle, Trash2, Star, BookOpen, Film,
+  ShieldAlert, Activity
 } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 
@@ -147,7 +148,7 @@ export default function ProfileScreen({ onPlaceSelect, userLocation, userLanguag
   const textMuted = isDarkMode ? "text-gray-400" : "text-gray-500";
 
   return (
-    <div className={`h-full w-full ${bgMain} flex flex-col overflow-y-auto pb-24 transition-colors duration-200`}>
+    <div className={`h-full w-full min-h-0 ${bgMain} flex flex-col overflow-y-auto pb-28 transition-colors duration-200`} style={{ height: "100%", overflowY: "auto" }}>
       <Toaster />
       <StatusBar light={isDarkMode} />
 
