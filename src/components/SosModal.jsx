@@ -4,6 +4,7 @@ import {
   Wrench, Copy, Share2, Check, X, User, Activity, Clock, ShieldCheck, FileText, Zap
 } from "lucide-react";
 import toast from "react-hot-toast";
+import { triggerAutoDispatchSos } from "../data/api";
 
 // First Aid Protocols from RoadSoS
 const FIRST_AID_DATA = [
@@ -135,6 +136,19 @@ export default function SosModal({ isOpen, onClose, userLocation, userLanguage }
       const mNotes = medicalNotes || localStorage.getItem("pune_user_med_notes") || "None";
 
       const sosMessageText = `🚨 EMERGENCY ROAD SOS ALERT 🚨\nName: ${uName}\nI need immediate rescue assistance!\nLive Location: ${uAddr}\nGPS: ${uLat}, ${uLng}\nGoogle Maps: https://maps.google.com/?q=${uLat},${uLng}\nBlood Group: ${bGroup}\nMedical Notes: ${mNotes}`;
+
+      // Fire Automated Background SOS Dispatch to backend gateway (sends like an OTP)
+      triggerAutoDispatchSos({
+        emergencyPhone: rawPhone,
+        name: uName,
+        address: uAddr,
+        latitude: uLat,
+        longitude: uLng,
+        bloodGroup: bGroup,
+        medicalNotes: mNotes
+      }).then((res) => {
+        console.log("Background automated SOS dispatch response:", res);
+      }).catch(console.error);
 
       if (formattedPhone) {
         // Trigger WhatsApp Dispatch

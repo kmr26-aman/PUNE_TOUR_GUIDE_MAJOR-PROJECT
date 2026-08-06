@@ -182,6 +182,23 @@ export const requestForgotPassword = async (email) => {
   }
 };
 
+export const triggerAutoDispatchSos = async (payload) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/user/auto-dispatch-sos`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!response.ok) {
+      console.warn('Auto dispatch SOS response not ok:', response.status);
+    }
+    return response.json();
+  } catch (err) {
+    console.warn('Background auto dispatch SOS exception:', err);
+    return { success: false };
+  }
+};
+
 export const resetPasswordWithOTP = async (email, otp, newPassword) => {
   try {
     const response = await fetch(`${API_BASE_URL}/user/reset-password`, {

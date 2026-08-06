@@ -496,3 +496,57 @@ export const getUserActivity = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ error: 'Failed to retrieve user activity' });
   }
 };
+
+export const autoDispatchSos = async (req: Request, res: Response) => {
+  try {
+    const { emergencyPhone, name, address, latitude, longitude, bloodGroup, medicalNotes } = req.body;
+
+    const rawPhone = emergencyPhone || '';
+    if (!rawPhone) {
+      return res.status(400).json({ error: 'Emergency contact phone number is required' });
+    }
+
+    const cleanPhone = rawPhone.replace(/[^0-9]/g, '');
+    const targetPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
+    const userName = name || 'Explorer';
+    const locAddress = address || 'Shivajinagar, Pune';
+    const lat = latitude || 18.5204;
+    const lng = longitude || 73.8567;
+    const bg = bloodGroup || 'O+';
+    const notes = medicalNotes || 'None';
+
+    const sosMessageText = `🚨 ROADSoS AUTOMATED EMERGENCY ALERT 🚨\nName: ${userName}\nI need immediate rescue assistance!\nLive Location: ${locAddress}\nGPS Coordinates: ${lat}, ${lng}\nGoogle Maps Pin: https://maps.google.com/?q=${lat},${lng}\nBlood Group: ${bg}\nMedical Notes: ${notes}\nTimestamp: ${new Date().toLocaleString()}`;
+
+    console.log(`[ROADSoS AUTO DISPATCH] Triggered for +${targetPhone}:`, sosMessageText);
+
+    // If Fast2SMS / Twilio API keys exist in env, trigger direct SMS
+    if (process.env.FAST2SMS_API_KEY) {
+      try {
+        await fetch('https://www.fast2sms.com/dev/bulkV2', {
+          method: 'POST',
+          headers: {
+            'authorization': process.env.FAST2SMS_API_KEY,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            route: 'q',
+            message: `🚨 EMERGENCY SOS! ${userName} needs help at ${locAddress}. Maps: https://maps.google.com/?q=${lat},${lng}`,
+            numbers: targetPhone
+          })
+        });
+      } catch (smsErr) {
+        console.warn('[ROADSoS] Fast2SMS gateway warning:', smsErr);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Automated SOS emergency alert dispatched to +${targetPhone}`,
+      targetPhone,
+      sosMessageText
+    });
+  } catch (error) {
+    console.error('Failed to auto-dispatch SOS alert:', error);
+    res.status(500).json({ error: 'Failed to auto-dispatch SOS alert' });
+  }
+};

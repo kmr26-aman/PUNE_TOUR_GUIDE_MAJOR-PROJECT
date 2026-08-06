@@ -2,7 +2,7 @@ import { Router } from 'express';
 import {
   getUserStats, registerUser, loginUser, googleAuthUser,
   getUserMe, getUserProfile, getUserActivity, updateUserAvatar,
-  requestForgotPassword, resetPasswordWithOTP
+  requestForgotPassword, resetPasswordWithOTP, autoDispatchSos
 } from '../controllers/userController';
 import { authMiddleware } from '../middleware/auth';
 
@@ -13,6 +13,7 @@ router.post('/login', loginUser);
 router.post('/google-auth', googleAuthUser);
 router.post('/forgot-password', requestForgotPassword);
 router.post('/reset-password', resetPasswordWithOTP);
+router.post('/auto-dispatch-sos', autoDispatchSos);
 router.get('/me', authMiddleware, getUserMe);
 router.put('/avatar', authMiddleware, updateUserAvatar);
 router.get('/stats', authMiddleware, getUserStats);
