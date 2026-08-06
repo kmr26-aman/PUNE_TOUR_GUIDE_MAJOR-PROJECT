@@ -5,6 +5,7 @@ import { calculateDistance, formatDistance } from "../utils/location";
 import { translations } from "../data/translations";
 import { Home, ArrowLeft, Heart, Image as ImageIcon, MapPin, Clock, Calendar, Phone, Info, Compass, ShieldCheck } from "lucide-react";
 import { getPlacePhotoList } from "../utils/placeImages";
+import toast from "react-hot-toast";
 
 export default function PlaceDetailScreen({ place, onBack, userLocation, userLanguage, onNavigateHome }) {
   const [isSaved, setIsSaved] = useState(place?.isSaved || false);
@@ -46,9 +47,10 @@ export default function PlaceDetailScreen({ place, onBack, userLocation, userLan
 
       await addStopToItinerary({
         itineraryDayId: day1Id,
+        placeId: place.id,
         name: place.name,
         name_mr: place.name_mr || place.name,
-        time: "TBD",
+        time: "10:00 AM",
         desc: place.description || "",
         desc_mr: place.description_mr || place.description || "",
         dotColor: "#8B3A2A",
@@ -56,10 +58,11 @@ export default function PlaceDetailScreen({ place, onBack, userLocation, userLan
       });
 
       setIsAdded(true);
+      toast.success(`Added ${place.name} to your itinerary! 🗺️`);
       setTimeout(() => setIsAdded(false), 3000);
     } catch (error) {
       console.error("Failed to add to itinerary:", error);
-      alert(userLanguage === "Marathi" ? "सहलीत जोडण्यात अडचण आली." : "Failed to add to itinerary. Please try again.");
+      toast.error(userLanguage === "Marathi" ? "सहलीत जोडण्यात अडचण आली." : "Failed to add to itinerary. Please try again.");
     } finally {
       setIsAdding(false);
     }

@@ -276,13 +276,24 @@ export const updateStopStatus = async (id, done) => {
   return response.json();
 };
 
-export const addStopToItinerary = async (itineraryDayId, placeId) => {
+export const addStopToItinerary = async (payloadOrDayId, placeId) => {
+  let bodyData = {};
+  if (typeof payloadOrDayId === 'object' && payloadOrDayId !== null) {
+    bodyData = payloadOrDayId;
+  } else {
+    bodyData = { itineraryDayId: payloadOrDayId, placeId };
+  }
+
   const response = await fetch(`${API_BASE_URL}/itinerary/stops`, {
     method: 'POST',
     headers: getHeaders(),
-    body: JSON.stringify({ itineraryDayId, placeId })
+    body: JSON.stringify(bodyData)
   });
-  if (!response.ok) throw new Error('Failed to add stop');
+
+  if (!response.ok) {
+    throw await parseErrorResponse(response, 'Failed to add stop to itinerary');
+  }
+
   clearApiCache('http');
   return response.json();
 };

@@ -1008,7 +1008,7 @@ export default function PlanScreen({ userLocation, userLanguage, weatherData, on
                 {/* Search Bar */}
                 <input 
                   type="text"
-                  placeholder={lt.searchPlacesPlaceholder}
+                  placeholder={lt.searchPlacesPlaceholder || "Search or type a custom place name..."}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   style={{
@@ -1017,11 +1017,46 @@ export default function PlanScreen({ userLocation, userLanguage, weatherData, on
                   }}
                 />
 
+                {/* Quick Add Custom Name Button if user typed a name */}
+                {searchQuery.trim().length > 0 && (
+                  <button
+                    onClick={() => {
+                      setSelectedPlace({
+                        id: Date.now(),
+                        name: searchQuery.trim(),
+                        name_mr: searchQuery.trim(),
+                        category: "Custom",
+                        emoji: "📍",
+                        description: "Custom spot added to itinerary",
+                        rating: 5.0
+                      });
+                    }}
+                    style={{
+                      background: "linear-gradient(135deg, #8B3A2A, #A94432)",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: 12,
+                      padding: "10px 14px",
+                      fontSize: 12,
+                      fontWeight: 800,
+                      cursor: "pointer",
+                      marginBottom: 12,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 6,
+                      boxShadow: "0 2px 8px rgba(139,58,42,0.3)"
+                    }}
+                  >
+                    <span>➕ Add Custom Spot: "{searchQuery.trim()}"</span>
+                  </button>
+                )}
+
                 {/* Places List */}
                 <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8, paddingRight: 4 }} className="no-scrollbar">
                   {filteredAvailablePlaces.length === 0 ? (
-                    <div style={{ textAlign: "center", color: colors.inkMuted, fontSize: 12, padding: "30px 0" }}>
-                      {t.noPlaces || "No places available to add."}
+                    <div style={{ textAlign: "center", color: colors.inkMuted, fontSize: 12, padding: "20px 0" }}>
+                      {searchQuery.trim().length === 0 ? (t.noPlaces || "No places available to add.") : `Tap the button above to add "${searchQuery.trim()}" to your plan!`}
                     </div>
                   ) : (
                     filteredAvailablePlaces.map((place) => (
