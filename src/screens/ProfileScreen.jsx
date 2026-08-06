@@ -35,8 +35,8 @@ export default function ProfileScreen({ onPlaceSelect, userLocation, userLanguag
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedBadge, setSelectedBadge] = useState(null);
   
-  // Active Profile Sub-Tab
-  const [activeMenuTab, setActiveMenuTab] = useState("stats"); // 'stats', 'media', 'wallet', 'settings'
+  // Active Profile Sub-Tab (Defaults to ROADSoS Emergency setup)
+  const [activeMenuTab, setActiveMenuTab] = useState("sos"); // 'sos', 'stats', 'media', 'wallet', 'settings'
 
   // User Profile Identity State
   const [userName, setUserName] = useState(() => localStorage.getItem("pune_user_name") || "Sourav Paul");
@@ -630,7 +630,7 @@ export default function ProfileScreen({ onPlaceSelect, userLocation, userLanguag
                 <Globe size={18} />
               </div>
               <div>
-                <p className={`text-xs font-bold ${textTitle}`}>{t.profile.language || "App Language"}</p>
+                <p className={`text-xs font-bold ${textTitle}`}>{t.appLanguage || "App Language"}</p>
                 <p className="text-[10px] text-gray-500">English, Marathi, Hindi, Gujarati</p>
               </div>
             </div>
