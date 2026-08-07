@@ -79,6 +79,91 @@ export default function ProfileScreen({ onPlaceSelect, userLocation, userLanguag
 
   const avatarInputRef = useRef(null);
   const coverInputRef = useRef(null);
+  const storyInputRef = useRef(null);
+
+  const compressImage = (file, maxDim = 800) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          if (width > height) {
+            if (width > maxDim) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            }
+          } else {
+            if (height > maxDim) {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.85));
+        };
+        img.onerror = reject;
+        img.src = e.target.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleAvatarFileSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select a valid image file.");
+      return;
+    }
+    try {
+      const compressed = await compressImage(file, 400);
+      setUserAvatar(compressed);
+      localStorage.setItem("pune_user_avatar", compressed);
+      toast.success("Profile photo updated from device! 📷");
+    } catch (err) {
+      toast.error("Failed to process image.");
+    }
+  };
+
+  const handleCoverFileSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select a valid image file.");
+      return;
+    }
+    try {
+      const compressed = await compressImage(file, 1000);
+      setCoverPhoto(compressed);
+      localStorage.setItem("pune_cover_photo", compressed);
+      toast.success("Cover banner updated from device! 🖼️");
+    } catch (err) {
+      toast.error("Failed to process image.");
+    }
+  };
+
+  const handleStoryCoverFileSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select a valid image file.");
+      return;
+    }
+    try {
+      const compressed = await compressImage(file, 500);
+      setNewStoryCover(compressed);
+      toast.success("Highlight cover photo selected! 🌟");
+    } catch (err) {
+      toast.error("Failed to process image.");
+    }
+  };
 
   const t = translations[userLanguage] || translations.English;
 
@@ -212,6 +297,29 @@ export default function ProfileScreen({ onPlaceSelect, userLocation, userLanguag
       <Toaster />
       <StatusBar light={isDarkMode} />
 
+      {/* Hidden File Inputs for Local Photo Selection */}
+      <input
+        type="file"
+        ref={avatarInputRef}
+        onChange={handleAvatarFileSelect}
+        accept="image/*"
+        className="hidden"
+      />
+      <input
+        type="file"
+        ref={coverInputRef}
+        onChange={handleCoverFileSelect}
+        accept="image/*"
+        className="hidden"
+      />
+      <input
+        type="file"
+        ref={storyInputRef}
+        onChange={handleStoryCoverFileSelect}
+        accept="image/*"
+        className="hidden"
+      />
+
       {/* Top Header Bar */}
       <div className={`p-4 border-b ${bgCard} flex justify-between items-center sticky top-0 z-20 shadow-sm backdrop-blur-md`}>
         <div className="flex items-center gap-3">
@@ -256,30 +364,48 @@ export default function ProfileScreen({ onPlaceSelect, userLocation, userLanguag
           style={{ backgroundImage: `url(${user.cover})` }}
         >
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
-          <button
-            onClick={handleShareProfile}
-            className="absolute top-3 right-3 bg-black/50 hover:bg-black/70 text-white p-2 rounded-xl backdrop-blur-md transition-all text-xs font-bold flex items-center gap-1.5 border border-white/20"
-          >
-            <Share2 size={14} />
-            <span>Share</span>
-          </button>
+          <div className="absolute top-3 right-3 flex items-center gap-2">
+            <button
+              onClick={() => coverInputRef.current?.click()}
+              className="bg-black/50 hover:bg-black/70 text-white p-2 rounded-xl backdrop-blur-md transition-all text-xs font-bold flex items-center gap-1.5 border border-white/20 shadow-sm"
+              title="Change Cover Banner Photo from Local Device"
+            >
+              <Camera size={14} />
+              <span>Change Cover</span>
+            </button>
+            <button
+              onClick={handleShareProfile}
+              className="bg-black/50 hover:bg-black/70 text-white p-2 rounded-xl backdrop-blur-md transition-all text-xs font-bold flex items-center gap-1.5 border border-white/20 shadow-sm"
+            >
+              <Share2 size={14} />
+              <span>Share</span>
+            </button>
+          </div>
         </div>
 
         {/* Profile Avatar & Info Overlay */}
         <div className={`px-4 pb-4 pt-0 border-b ${bgCard} relative`}>
           <div className="flex items-end justify-between -mt-10 mb-3">
-            <div className="relative cursor-pointer" onClick={() => setShowEditProfileModal(true)}>
+            <div
+              className="relative group cursor-pointer"
+              onClick={() => avatarInputRef.current?.click()}
+              title="Click to select profile photo from device"
+            >
               <img
                 src={user.avatar}
                 alt="User Avatar"
-                className="w-20 h-20 rounded-full object-cover border-4 border-white dark:border-[#241E1C] shadow-lg"
+                className="w-20 h-20 rounded-full object-cover border-4 border-white dark:border-[#241E1C] shadow-lg group-hover:opacity-90 transition-opacity"
                 onError={(e) => {
                   e.target.src = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80";
                 }}
               />
-              <span className="absolute bottom-1 right-1 bg-[#8B3A2A] text-white p-1 rounded-full text-[10px] border-2 border-white shadow-sm">
-                🚩
-              </span>
+              <button
+                type="button"
+                className="absolute bottom-0 right-0 bg-[#8B3A2A] hover:bg-[#742E20] text-white p-1.5 rounded-full border-2 border-white dark:border-[#241E1C] shadow-md transition-transform group-hover:scale-110"
+                title="Change Avatar Photo"
+              >
+                <Camera size={12} />
+              </button>
             </div>
 
             {/* Level Badge */}
@@ -653,14 +779,30 @@ export default function ProfileScreen({ onPlaceSelect, userLocation, userLanguag
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">Cover Photo Image URL</label>
-                <input
-                  type="text"
-                  placeholder="https://images.unsplash.com/..."
-                  className="w-full p-2.5 border rounded-xl text-xs outline-none bg-[#FBF8F3]"
-                  value={newStoryCover}
-                  onChange={(e) => setNewStoryCover(e.target.value)}
-                />
+                <label className="block text-xs font-bold text-gray-700 mb-1">Highlight Cover Photo</label>
+                <button
+                  type="button"
+                  onClick={() => storyInputRef.current?.click()}
+                  className="w-full py-2.5 px-3 bg-[#FAF6F0] hover:bg-[#F2EAE7] text-[#8B3A2A] border border-[#8B3A2A]/30 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-xs"
+                >
+                  <UploadCloud size={16} />
+                  <span>Select Photo from Local Device</span>
+                </button>
+                {newStoryCover ? (
+                  <div className="mt-2 relative rounded-xl overflow-hidden border border-gray-200 h-24 flex items-center justify-center bg-gray-50">
+                    <img src={newStoryCover} alt="Cover Preview" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setNewStoryCover("")}
+                      className="absolute top-1.5 right-1.5 bg-black/70 text-white p-1 rounded-full hover:bg-black transition-colors"
+                      title="Remove Photo"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-gray-400 mt-1 italic text-center">Select photo from your phone or PC</p>
+                )}
               </div>
 
               <div className="flex gap-2 pt-2">
@@ -792,7 +934,15 @@ export default function ProfileScreen({ onPlaceSelect, userLocation, userLanguag
 
               {/* Cover Banner Selector */}
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">Select Profile Background Cover Banner</label>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Profile Cover Banner</label>
+                <button
+                  type="button"
+                  onClick={() => coverInputRef.current?.click()}
+                  className="w-full mb-2.5 py-2 px-3 bg-[#FAF6F0] hover:bg-[#F2EAE7] text-[#8B3A2A] border border-[#8B3A2A]/30 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-xs"
+                >
+                  <UploadCloud size={16} />
+                  <span>Select Cover Photo from Device</span>
+                </button>
                 <div className="grid grid-cols-2 gap-2 mb-2">
                   {PRESET_BANNERS.map(banner => (
                     <div
@@ -807,25 +957,25 @@ export default function ProfileScreen({ onPlaceSelect, userLocation, userLanguag
                     </div>
                   ))}
                 </div>
-
-                <input
-                  type="text"
-                  placeholder="Or enter custom Cover Image URL"
-                  className="w-full p-2 border border-gray-300 rounded-xl text-xs outline-none bg-[#FBF8F3]"
-                  value={coverPhoto}
-                  onChange={(e) => setCoverPhoto(e.target.value)}
-                />
               </div>
 
               {/* Avatar Selector */}
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">Avatar Profile Photo URL</label>
-                <input
-                  type="text"
-                  className="w-full p-2 border border-gray-300 rounded-xl text-xs outline-none bg-[#FBF8F3]"
-                  value={userAvatar}
-                  onChange={(e) => setUserAvatar(e.target.value)}
-                />
+                <label className="block text-xs font-bold text-gray-700 mb-1">Avatar Profile Photo</label>
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  className="w-full py-2 px-3 bg-[#FAF6F0] hover:bg-[#F2EAE7] text-[#8B3A2A] border border-[#8B3A2A]/30 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-xs"
+                >
+                  <UploadCloud size={16} />
+                  <span>Select Avatar Photo from Device</span>
+                </button>
+                {userAvatar && (
+                  <div className="flex items-center gap-2.5 mt-2 p-1.5 bg-[#FAF6F0] rounded-xl border border-gray-200">
+                    <img src={userAvatar} alt="Avatar Preview" className="w-9 h-9 rounded-full object-cover border border-gray-300" />
+                    <span className="text-[11px] text-gray-700 font-bold truncate">Current Avatar Selected</span>
+                  </div>
+                )}
               </div>
             </div>
 

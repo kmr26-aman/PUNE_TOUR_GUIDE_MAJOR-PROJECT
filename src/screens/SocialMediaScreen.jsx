@@ -355,34 +355,36 @@ const SocialMediaScreen = ({ userLanguage, onUserSelect, onPostSelect, onNavigat
       <StatusBar />
       
       {/* Top Navigation Bar */}
-      <div className="p-4 border-b border-gray-200 bg-white flex justify-between items-center sticky top-0 z-30 shadow-sm">
+      <div className="p-3.5 border-b border-gray-200 bg-white flex justify-between items-center shadow-xs">
         <div className="flex items-center gap-2">
           {onNavigateHome && (
             <button
               onClick={onNavigateHome}
               title={t.home || "Home"}
-              className="w-9 h-9 flex items-center justify-center rounded-xl bg-[#8B3A2A] text-white hover:bg-opacity-90 transition-all shadow-sm"
+              className="w-8 h-8 flex items-center justify-center rounded-xl bg-[#8B3A2A] text-white hover:bg-opacity-90 transition-all shadow-xs"
             >
-              <Home size={18} />
+              <Home size={16} />
             </button>
           )}
-          <h1 className="text-xl font-extrabold text-gray-900 flex items-center gap-1.5">
+          <h1 className="text-lg font-extrabold text-gray-900 flex items-center gap-1.5">
             <span>{userLanguage === 'Marathi' ? 'पुणे क्षण' : userLanguage === 'Hindi' ? 'पुणे पल' : 'Pune Moments'}</span>
-            <Sparkles size={18} className="text-[#8B3A2A]" />
+            <Sparkles size={16} className="text-[#8B3A2A]" />
           </h1>
         </div>
 
+        {/* Compact & Small New Moment Button */}
         <button
           onClick={onNavigateToCreatePost}
-          className="bg-[#8B3A2A] text-white px-3.5 py-1.5 rounded-xl font-bold text-xs hover:bg-opacity-90 transition-all shadow-sm flex items-center gap-1.5"
+          className="bg-[#8B3A2A] hover:bg-[#742E20] text-white px-2.5 py-1 rounded-lg font-bold text-[11px] transition-all shadow-xs flex items-center gap-1 active:scale-95 flex-shrink-0"
+          title={userLanguage === 'Marathi' ? 'नवीन क्षण' : 'New Moment'}
         >
-          <PlusCircle size={16} />
-          <span>{userLanguage === 'Marathi' ? 'नवीन क्षण' : 'New Moment'}</span>
+          <PlusCircle size={13} />
+          <span className="whitespace-nowrap">{userLanguage === 'Marathi' ? 'नवीन' : 'New Moment'}</span>
         </button>
       </div>
 
       {/* Upload Banner with Logged-in User Badge */}
-      <div className="bg-gradient-to-r from-[#FAF6F0] to-[#F5EFE6] px-4 py-2.5 border-b border-gray-200 flex justify-between items-center">
+      <div className="bg-gradient-to-r from-[#FAF6F0] to-[#F5EFE6] px-4 py-2 border-b border-gray-200 flex justify-between items-center">
         <div className="flex items-center gap-1.5 overflow-hidden">
           <span className="text-xs font-black text-[#8B3A2A] bg-[#8B3A2A]/10 px-2 py-0.5 rounded-lg truncate">
             {currentUserName}
@@ -400,14 +402,14 @@ const SocialMediaScreen = ({ userLanguage, onUserSelect, onPostSelect, onNavigat
       </div>
 
       {/* Category & Filter Chips Bar */}
-      <div className="flex gap-2 px-4 py-2.5 overflow-x-auto bg-white border-b border-gray-200 no-scrollbar sticky top-[57px] z-20 shadow-xs">
+      <div className="flex gap-2 px-4 py-2 overflow-x-auto bg-white border-b border-gray-200 no-scrollbar shadow-xs">
         {CATEGORY_CHIPS.map(chip => (
           <button
             key={chip.id}
             onClick={() => setActiveCategory(chip.id)}
             className={`px-3 py-1 rounded-xl text-xs font-bold whitespace-nowrap transition-all border ${
               activeCategory === chip.id
-                ? 'bg-[#8B3A2A] text-white border-[#8B3A2A] shadow-sm'
+                ? 'bg-[#8B3A2A] text-white border-[#8B3A2A] shadow-xs'
                 : 'bg-[#FAF6F0] text-gray-700 border-gray-200 hover:bg-[#F2EAE7]'
             }`}
           >
@@ -416,10 +418,10 @@ const SocialMediaScreen = ({ userLanguage, onUserSelect, onPostSelect, onNavigat
         ))}
       </div>
 
-      {/* Feed Container */}
+      {/* Main Feed Container (unified scroll with whole page) */}
       <div
         ref={feedRef}
-        className="flex-1 overflow-y-auto pb-16"
+        className="w-full pb-16"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
