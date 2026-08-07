@@ -86,6 +86,72 @@ export default function SosModal({ isOpen, onClose, userLocation, userLanguage }
     }
   }, [isOpen]);
 
+  // 📱 ULTRA HIGH-SENSITIVITY PHONE SHAKE DETECTOR (Triggers on low/slow phone shake)
+  useEffect(() => {
+    let lastX = null;
+    let lastY = null;
+    let lastZ = null;
+    let lastTime = Date.now();
+    let isCooldown = false;
+
+    // Ultra-sensitive threshold for low/slow phone movement (5.0 m/s^2 delta)
+    const LOW_SHAKE_THRESHOLD = 5.0;
+
+    const handleMotion = (event) => {
+      if (isCooldown) return;
+
+      const acc = event.accelerationIncludingGravity || event.acceleration;
+      if (!acc) return;
+
+      const { x, y, z } = acc;
+      if (x === null || y === null || z === null) return;
+
+      const currentTime = Date.now();
+      const diffTime = currentTime - lastTime;
+
+      if (diffTime > 80) { // Evaluate motion every 80ms for instant low-shake detection
+        if (lastX !== null && lastY !== null && lastZ !== null) {
+          const deltaX = Math.abs(x - lastX);
+          const deltaY = Math.abs(y - lastY);
+          const deltaZ = Math.abs(z - lastZ);
+          const totalDelta = deltaX + deltaY + deltaZ;
+
+          if (totalDelta > LOW_SHAKE_THRESHOLD) {
+            isCooldown = true;
+            if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 400]);
+
+            toast.error("🚨 Low Phone Shake Detected! Initiating Emergency Rescue Alarm & Call...", {
+              duration: 4000,
+              icon: "📱",
+            });
+
+            // Automatically start 3-second SOS countdown
+            setCountdown(3);
+
+            setTimeout(() => {
+              isCooldown = false;
+            }, 3500);
+          }
+        }
+
+        lastX = x;
+        lastY = y;
+        lastZ = z;
+        lastTime = currentTime;
+      }
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("devicemotion", handleMotion, false);
+    }
+
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("devicemotion", handleMotion, false);
+      }
+    };
+  }, []);
+
   // Helper to format 10-digit numbers into international format
   const formatPhoneNumber = (phone) => {
     if (!phone) return "";
@@ -151,21 +217,26 @@ export default function SosModal({ isOpen, onClose, userLocation, userLanguage }
       }).catch(console.error);
 
       if (formattedPhone) {
-        // Trigger WhatsApp Dispatch
-        const waUrl = `https://api.whatsapp.com/send?phone=${formattedPhone}&text=${encodeURIComponent(sosMessageText)}`;
-        window.open(waUrl, "_blank");
+        // Direct Phone Call to Emergency Contact
+        try {
+          window.location.href = `tel:${formattedPhone}`;
+        } catch (e) {
+          console.warn("Direct phone call trigger error:", e);
+        }
 
-        // Trigger SMS Dispatch
+        // Trigger WhatsApp Dispatch
         setTimeout(() => {
-          try {
-            window.location.href = `sms:${formattedPhone}?body=${encodeURIComponent(sosMessageText)}`;
-          } catch (e) {
-            console.warn("SMS dispatch fallback:", e);
-          }
+          const waUrl = `https://api.whatsapp.com/send?phone=${formattedPhone}&text=${encodeURIComponent(sosMessageText)}`;
+          window.open(waUrl, "_blank");
         }, 600);
+      } else {
+        // Fallback call to 112 national emergency service
+        try {
+          window.location.href = "tel:112";
+        } catch (e) {}
       }
 
-      toast.error("🚨 EMERGENCY DISPATCH ACTIVATED! WhatsApp & SMS alert sent.", { duration: 6000 });
+      toast.error("🚨 EMERGENCY DISPATCH ACTIVATED! Calling emergency contact & sending alerts.", { duration: 6000 });
     }
   }, [countdown]);
 
@@ -296,8 +367,24 @@ export default function SosModal({ isOpen, onClose, userLocation, userLanguage }
                       <span style={{ fontSize: 11, fontWeight: 900 }}>HOLD SOS</span>
                     </button>
                     <p style={{ fontSize: 11, color: "#6B5B52", fontWeight: 700, margin: 0 }}>
-                      Tap button above or shake phone to trigger 3-sec Emergency Rescue Alarm
+                      Tap button above or shake phone to trigger 3-sec Emergency Rescue Alarm & Call
                     </p>
+                    <div style={{ marginTop: 8, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 10, fontWeight: 900, background: "#FEF2F2", color: "#DC2626", padding: "3px 8px", borderRadius: 8, border: "1px solid #FCA5A5" }}>
+                        ⚡ Ultra-High Shake Sensitivity Enabled
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          toast.error("🧪 Simulated Low Phone Shake Triggered!", { icon: "📱" });
+                          startSosCountdown();
+                        }}
+                        style={{ fontSize: 10, fontWeight: 800, background: "#8B3A2A", color: "#fff", padding: "3px 8px", borderRadius: 8, border: "none", cursor: "pointer" }}
+                        title="Simulate low shake for testing"
+                      >
+                        Test Low Shake
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

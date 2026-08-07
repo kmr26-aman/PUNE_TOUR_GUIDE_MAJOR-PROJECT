@@ -186,6 +186,53 @@ export default function HomeScreen({ onPlaceSelect, onSearchClick, onNavigateToC
     }
   }, [userLocation]);
 
+  // 📱 ULTRA HIGH-SENSITIVITY SHAKE LISTENER ON HOME TAB (Opens SOS & triggers emergency call on low shake)
+  useEffect(() => {
+    let lastX = null;
+    let lastY = null;
+    let lastZ = null;
+    let lastTime = Date.now();
+    let isCooldown = false;
+
+    const LOW_SHAKE_THRESHOLD = 5.0; // Ultra-sensitive low/slow shake threshold
+
+    const handleMotion = (event) => {
+      if (isCooldown) return;
+      const acc = event.accelerationIncludingGravity || event.acceleration;
+      if (!acc) return;
+
+      const { x, y, z } = acc;
+      if (x === null || y === null || z === null) return;
+
+      const currentTime = Date.now();
+      if (currentTime - lastTime > 80) {
+        if (lastX !== null && lastY !== null && lastZ !== null) {
+          const delta = Math.abs(x - lastX) + Math.abs(y - lastY) + Math.abs(z - lastZ);
+          if (delta > LOW_SHAKE_THRESHOLD) {
+            isCooldown = true;
+            if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 400]);
+            toast.error("🚨 Low Phone Shake Detected! Opening Emergency SOS...", { duration: 4000 });
+            setShowSosModal(true);
+            setTimeout(() => { isCooldown = false; }, 3500);
+          }
+        }
+        lastX = x;
+        lastY = y;
+        lastZ = z;
+        lastTime = currentTime;
+      }
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("devicemotion", handleMotion, false);
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("devicemotion", handleMotion, false);
+      }
+    };
+  }, []);
+
   // Handle Location Picker change on map click
   const handleMapPickerClick = (lat, lng) => {
     setMapPickerCoords({ lat, lng });
