@@ -54,6 +54,10 @@ export const registerUser = async (req: Request, res: Response) => {
         name: user.name,
         email: user.email,
         avatarUrl: user.avatarUrl,
+        coverUrl: user.coverUrl,
+        bio: user.bio,
+        handle: user.handle,
+        stories: user.stories,
         xp: user.xp,
       }
     });
@@ -96,6 +100,10 @@ export const loginUser = async (req: Request, res: Response) => {
         name: user.name,
         email: user.email,
         avatarUrl: user.avatarUrl,
+        coverUrl: user.coverUrl,
+        bio: user.bio,
+        handle: user.handle,
+        stories: user.stories,
         xp: user.xp
       }
     });
@@ -231,6 +239,10 @@ export const googleAuthUser = async (req: Request, res: Response) => {
         name: user.name,
         email: user.email,
         avatarUrl: user.avatarUrl,
+        coverUrl: user.coverUrl,
+        bio: user.bio,
+        handle: user.handle,
+        stories: user.stories,
         xp: user.xp,
       },
     });
@@ -259,6 +271,10 @@ export const getUserMe = async (req: AuthRequest, res: Response) => {
       name: user.name,
       email: user.email,
       avatarUrl: user.avatarUrl,
+      coverUrl: user.coverUrl,
+      bio: user.bio,
+      handle: user.handle,
+      stories: user.stories,
       xp: user.xp
     });
   } catch (error) {
@@ -285,7 +301,11 @@ export const getUserProfile = async (req: AuthRequest, res: Response) => {
       select: {
         id: true,
         name: true,
-        avatarUrl: true, // Include avatarUrl in profile
+        avatarUrl: true,
+        coverUrl: true,
+        bio: true,
+        handle: true,
+        stories: true,
         // Include posts with their likes and comments for the profile view
         posts: {
           include: {
@@ -554,19 +574,27 @@ export const autoDispatchSos = async (req: Request, res: Response) => {
 export const updateUserProfile = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
-    const { name, avatarUrl } = req.body;
+    const { name, avatarUrl, coverUrl, bio, handle, stories } = req.body;
 
     const updatedUser = await prisma.user.update({
       where: { id: req.user.id },
       data: {
-        ...(name && { name: name.trim() }),
-        ...(avatarUrl && { avatarUrl }),
+        ...(name !== undefined && { name: name.trim() }),
+        ...(avatarUrl !== undefined && { avatarUrl }),
+        ...(coverUrl !== undefined && { coverUrl }),
+        ...(bio !== undefined && { bio }),
+        ...(handle !== undefined && { handle }),
+        ...(stories !== undefined && { stories }),
       },
       select: {
         id: true,
         name: true,
         email: true,
         avatarUrl: true,
+        coverUrl: true,
+        bio: true,
+        handle: true,
+        stories: true,
         xp: true,
       }
     });

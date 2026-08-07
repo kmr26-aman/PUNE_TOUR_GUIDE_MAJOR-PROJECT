@@ -54,6 +54,10 @@ model User {
   email         String         @unique
   password      String?
   avatarUrl     String?
+  coverUrl      String?
+  bio           String?
+  handle        String?
+  stories       Json?
   xp            Int            @default(0)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt

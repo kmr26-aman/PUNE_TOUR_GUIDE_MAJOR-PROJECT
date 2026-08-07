@@ -126,7 +126,8 @@ export default function ProfileScreen({ onPlaceSelect, userLocation, userLanguag
       const compressed = await compressImage(file, 400);
       setUserAvatar(compressed);
       localStorage.setItem("pune_user_avatar", compressed);
-      toast.success("Profile photo updated from device! 📷");
+      updateUserProfileApi({ avatarUrl: compressed }).catch(err => console.warn("Avatar sync error:", err));
+      toast.success("Profile photo updated & synced! 📷");
     } catch (err) {
       toast.error("Failed to process image.");
     }
@@ -143,7 +144,8 @@ export default function ProfileScreen({ onPlaceSelect, userLocation, userLanguag
       const compressed = await compressImage(file, 1000);
       setCoverPhoto(compressed);
       localStorage.setItem("pune_cover_photo", compressed);
-      toast.success("Cover banner updated from device! 🖼️");
+      updateUserProfileApi({ coverUrl: compressed }).catch(err => console.warn("Cover banner sync error:", err));
+      toast.success("Cover banner updated & synced! 🖼️");
     } catch (err) {
       toast.error("Failed to process image.");
     }
@@ -205,6 +207,9 @@ export default function ProfileScreen({ onPlaceSelect, userLocation, userLanguag
           if (me.value.email) setUserEmail(me.value.email);
           if (me.value.avatarUrl) setUserAvatar(me.value.avatarUrl);
           if (me.value.coverUrl) setCoverPhoto(me.value.coverUrl);
+          if (me.value.bio) setUserBio(me.value.bio);
+          if (me.value.handle) setUserHandle(me.value.handle);
+          if (me.value.stories) setStories(me.value.stories);
         }
       } catch (error) {
         console.error("Failed to fetch profile details:", error);
@@ -225,8 +230,11 @@ export default function ProfileScreen({ onPlaceSelect, userLocation, userLanguag
     try {
       await updateUserProfileApi({
         name: userName,
+        handle: userHandle,
+        bio: userBio,
         avatarUrl: userAvatar,
         coverUrl: coverPhoto,
+        stories: stories,
       });
     } catch (e) {
       console.warn("Backend profile sync warning:", e);
@@ -250,7 +258,9 @@ export default function ProfileScreen({ onPlaceSelect, userLocation, userLanguag
       cover: newStoryCover.trim() || "https://images.unsplash.com/photo-1589308078059-be1415eab4c3?auto=format&fit=crop&w=200&q=80",
     };
 
-    setStories(prev => [storyObj, ...prev]);
+    const updatedStories = [storyObj, ...stories];
+    setStories(updatedStories);
+    updateUserProfileApi({ stories: updatedStories }).catch(err => console.warn("Story sync error:", err));
     setNewStoryTitle("");
     setNewStoryCover("");
     setShowAddStoryModal(false);
@@ -258,7 +268,9 @@ export default function ProfileScreen({ onPlaceSelect, userLocation, userLanguag
   };
 
   const handleDeleteStory = (storyId) => {
-    setStories(prev => prev.filter(s => s.id !== storyId));
+    const updatedStories = stories.filter(s => s.id !== storyId);
+    setStories(updatedStories);
+    updateUserProfileApi({ stories: updatedStories }).catch(err => console.warn("Story sync error:", err));
     setActiveStory(null);
     toast.success("Highlight story deleted.");
   };

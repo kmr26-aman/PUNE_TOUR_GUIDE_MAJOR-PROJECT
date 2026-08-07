@@ -96,6 +96,10 @@ export const loginUser = async (email, password) => {
       localStorage.setItem('pune_auth_token', data.token);
       if (data.user?.name) localStorage.setItem('pune_user_name', data.user.name);
       if (data.user?.avatarUrl) localStorage.setItem('pune_user_avatar', data.user.avatarUrl);
+      if (data.user?.coverUrl) localStorage.setItem('pune_cover_photo', data.user.coverUrl);
+      if (data.user?.bio) localStorage.setItem('pune_user_bio', data.user.bio);
+      if (data.user?.handle) localStorage.setItem('pune_user_handle', data.user.handle);
+      if (data.user?.stories) localStorage.setItem('pune_user_stories', JSON.stringify(data.user.stories));
     }
     return data;
   } catch (err) {
@@ -124,6 +128,10 @@ export const registerUser = async (name, email, password) => {
       localStorage.setItem('pune_auth_token', data.token);
       if (data.user?.name) localStorage.setItem('pune_user_name', data.user.name);
       if (data.user?.avatarUrl) localStorage.setItem('pune_user_avatar', data.user.avatarUrl);
+      if (data.user?.coverUrl) localStorage.setItem('pune_cover_photo', data.user.coverUrl);
+      if (data.user?.bio) localStorage.setItem('pune_user_bio', data.user.bio);
+      if (data.user?.handle) localStorage.setItem('pune_user_handle', data.user.handle);
+      if (data.user?.stories) localStorage.setItem('pune_user_stories', JSON.stringify(data.user.stories));
     }
     return data;
   } catch (err) {
@@ -152,6 +160,10 @@ export const googleAuthUser = async (googleData) => {
       localStorage.setItem('pune_auth_token', data.token);
       if (data.user?.name) localStorage.setItem('pune_user_name', data.user.name);
       if (data.user?.avatarUrl) localStorage.setItem('pune_user_avatar', data.user.avatarUrl);
+      if (data.user?.coverUrl) localStorage.setItem('pune_cover_photo', data.user.coverUrl);
+      if (data.user?.bio) localStorage.setItem('pune_user_bio', data.user.bio);
+      if (data.user?.handle) localStorage.setItem('pune_user_handle', data.user.handle);
+      if (data.user?.stories) localStorage.setItem('pune_user_stories', JSON.stringify(data.user.stories));
     }
     return data;
   } catch (err) {
@@ -229,6 +241,10 @@ export const fetchUserMe = async () => {
   const data = await response.json();
   if (data.name) localStorage.setItem('pune_user_name', data.name);
   if (data.avatarUrl) localStorage.setItem('pune_user_avatar', data.avatarUrl);
+  if (data.coverUrl) localStorage.setItem('pune_cover_photo', data.coverUrl);
+  if (data.bio) localStorage.setItem('pune_user_bio', data.bio);
+  if (data.handle) localStorage.setItem('pune_user_handle', data.handle);
+  if (data.stories) localStorage.setItem('pune_user_stories', JSON.stringify(data.stories));
   return data;
 };
 
@@ -238,6 +254,9 @@ export const logoutUser = () => {
   localStorage.removeItem('pune_user_name');
   localStorage.removeItem('pune_user_bio');
   localStorage.removeItem('pune_user_avatar');
+  localStorage.removeItem('pune_cover_photo');
+  localStorage.removeItem('pune_user_handle');
+  localStorage.removeItem('pune_user_stories');
 };
 
 export const fetchPlaces = async (params = {}) => {
