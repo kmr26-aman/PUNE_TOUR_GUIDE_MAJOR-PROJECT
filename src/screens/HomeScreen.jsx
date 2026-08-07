@@ -186,15 +186,17 @@ export default function HomeScreen({ onPlaceSelect, onSearchClick, onNavigateToC
     }
   }, [userLocation]);
 
-  // 📱 ULTRA HIGH-SENSITIVITY SHAKE LISTENER ON HOME TAB (Opens SOS & triggers emergency call on low shake)
+  // 📱 STRONG SHAKE DETECTOR ON HOME TAB (Only triggers on deliberate strong physical shake)
   useEffect(() => {
     let lastX = null;
     let lastY = null;
     let lastZ = null;
     let lastTime = Date.now();
+    let shakeCount = 0;
+    let shakeTimer = null;
     let isCooldown = false;
 
-    const LOW_SHAKE_THRESHOLD = 5.0; // Ultra-sensitive low/slow shake threshold
+    const STRONG_SHAKE_THRESHOLD = 24.0; // High threshold prevents false triggers during normal usage
 
     const handleMotion = (event) => {
       if (isCooldown) return;
@@ -208,12 +210,27 @@ export default function HomeScreen({ onPlaceSelect, onSearchClick, onNavigateToC
       if (currentTime - lastTime > 80) {
         if (lastX !== null && lastY !== null && lastZ !== null) {
           const delta = Math.abs(x - lastX) + Math.abs(y - lastY) + Math.abs(z - lastZ);
-          if (delta > LOW_SHAKE_THRESHOLD) {
-            isCooldown = true;
-            if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 400]);
-            toast.error("🚨 Low Phone Shake Detected! Opening Emergency SOS...", { duration: 4000 });
-            setShowSosModal(true);
-            setTimeout(() => { isCooldown = false; }, 3500);
+          if (delta > STRONG_SHAKE_THRESHOLD) {
+            shakeCount++;
+            if (!shakeTimer) {
+              shakeTimer = setTimeout(() => {
+                shakeCount = 0;
+                shakeTimer = null;
+              }, 600);
+            }
+
+            if (shakeCount >= 2) {
+              isCooldown = true;
+              shakeCount = 0;
+              if (shakeTimer) {
+                clearTimeout(shakeTimer);
+                shakeTimer = null;
+              }
+              if (navigator.vibrate) navigator.vibrate([300, 100, 300, 100, 600]);
+              toast.error("🚨 Strong Phone Shake Detected! Opening Emergency SOS...", { duration: 4000 });
+              setShowSosModal(true);
+              setTimeout(() => { isCooldown = false; }, 4000);
+            }
           }
         }
         lastX = x;

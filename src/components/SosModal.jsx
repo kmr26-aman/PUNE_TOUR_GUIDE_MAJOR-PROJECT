@@ -86,16 +86,18 @@ export default function SosModal({ isOpen, onClose, userLocation, userLanguage }
     }
   }, [isOpen]);
 
-  // 📱 ULTRA HIGH-SENSITIVITY PHONE SHAKE DETECTOR (Triggers on low/slow phone shake)
+  // 📱 STRONG SHAKE DETECTOR (Prevents false triggers during normal app usage)
   useEffect(() => {
     let lastX = null;
     let lastY = null;
     let lastZ = null;
     let lastTime = Date.now();
+    let shakeCount = 0;
+    let shakeTimer = null;
     let isCooldown = false;
 
-    // Ultra-sensitive threshold for low/slow phone movement (5.0 m/s^2 delta)
-    const LOW_SHAKE_THRESHOLD = 5.0;
+    // High threshold to ensure normal app usage/scrolling NEVER triggers SOS (24.0 m/s^2)
+    const STRONG_SHAKE_THRESHOLD = 24.0;
 
     const handleMotion = (event) => {
       if (isCooldown) return;
@@ -109,28 +111,45 @@ export default function SosModal({ isOpen, onClose, userLocation, userLanguage }
       const currentTime = Date.now();
       const diffTime = currentTime - lastTime;
 
-      if (diffTime > 80) { // Evaluate motion every 80ms for instant low-shake detection
+      if (diffTime > 80) {
         if (lastX !== null && lastY !== null && lastZ !== null) {
           const deltaX = Math.abs(x - lastX);
           const deltaY = Math.abs(y - lastY);
           const deltaZ = Math.abs(z - lastZ);
           const totalDelta = deltaX + deltaY + deltaZ;
 
-          if (totalDelta > LOW_SHAKE_THRESHOLD) {
-            isCooldown = true;
-            if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 400]);
+          if (totalDelta > STRONG_SHAKE_THRESHOLD) {
+            shakeCount++;
 
-            toast.error("🚨 Low Phone Shake Detected! Initiating Emergency Rescue Alarm & Call...", {
-              duration: 4000,
-              icon: "📱",
-            });
+            if (!shakeTimer) {
+              shakeTimer = setTimeout(() => {
+                shakeCount = 0;
+                shakeTimer = null;
+              }, 600); // Must accumulate at least 2 strong shake peaks within 600ms
+            }
 
-            // Automatically start 3-second SOS countdown
-            setCountdown(3);
+            if (shakeCount >= 2) {
+              isCooldown = true;
+              shakeCount = 0;
+              if (shakeTimer) {
+                clearTimeout(shakeTimer);
+                shakeTimer = null;
+              }
 
-            setTimeout(() => {
-              isCooldown = false;
-            }, 3500);
+              if (navigator.vibrate) navigator.vibrate([300, 100, 300, 100, 600]);
+
+              toast.error("🚨 STRONG PHONE SHAKE DETECTED! Initiating Emergency Call & Fallback Alerts...", {
+                duration: 5000,
+                icon: "🚨",
+              });
+
+              // Automatically start 3-second SOS countdown
+              setCountdown(3);
+
+              setTimeout(() => {
+                isCooldown = false;
+              }, 4000);
+            }
           }
         }
 
@@ -216,27 +235,35 @@ export default function SosModal({ isOpen, onClose, userLocation, userLanguage }
         console.log("Background automated SOS dispatch response:", res);
       }).catch(console.error);
 
-      if (formattedPhone) {
-        // Direct Phone Call to Emergency Contact
-        try {
-          window.location.href = `tel:${formattedPhone}`;
-        } catch (e) {
-          console.warn("Direct phone call trigger error:", e);
-        }
+      const targetPhone = formattedPhone || "112";
 
-        // Trigger WhatsApp Dispatch
-        setTimeout(() => {
-          const waUrl = `https://api.whatsapp.com/send?phone=${formattedPhone}&text=${encodeURIComponent(sosMessageText)}`;
-          window.open(waUrl, "_blank");
-        }, 600);
-      } else {
-        // Fallback call to 112 national emergency service
-        try {
-          window.location.href = "tel:112";
-        } catch (e) {}
+      // 1. Initiate Direct Phone Call Ringing
+      toast.error(`📞 Dialing Emergency Contact (${targetPhone})... Ringing!`, { duration: 6000 });
+      try {
+        window.location.href = `tel:${targetPhone}`;
+      } catch (e) {
+        console.warn("Direct phone call trigger error:", e);
       }
 
-      toast.error("🚨 EMERGENCY DISPATCH ACTIVATED! Calling emergency contact & sending alerts.", { duration: 6000 });
+      // 2. Fallback Dispatch: If call is unreceived / unanswered, send WhatsApp & SMS details after 5s
+      setTimeout(() => {
+        if (formattedPhone) {
+          toast("Fallback Active: Dispatching Live GPS & Medical Details via WhatsApp & SMS...", { icon: "💬", duration: 5000 });
+
+          // WhatsApp Dispatch
+          const waUrl = `https://api.whatsapp.com/send?phone=${formattedPhone}&text=${encodeURIComponent(sosMessageText)}`;
+          window.open(waUrl, "_blank");
+
+          // SMS Dispatch
+          setTimeout(() => {
+            try {
+              window.location.href = `sms:${formattedPhone}?body=${encodeURIComponent(sosMessageText)}`;
+            } catch (e) {
+              console.warn("SMS fallback error:", e);
+            }
+          }, 1000);
+        }
+      }, 5000);
     }
   }, [countdown]);
 
@@ -367,22 +394,22 @@ export default function SosModal({ isOpen, onClose, userLocation, userLanguage }
                       <span style={{ fontSize: 11, fontWeight: 900 }}>HOLD SOS</span>
                     </button>
                     <p style={{ fontSize: 11, color: "#6B5B52", fontWeight: 700, margin: 0 }}>
-                      Tap button above or shake phone to trigger 3-sec Emergency Rescue Alarm & Call
+                      Hold button above or strongly shake phone to dial Emergency Contact & fallback alerts
                     </p>
                     <div style={{ marginTop: 8, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, flexWrap: "wrap" }}>
-                      <span style={{ fontSize: 10, fontWeight: 900, background: "#FEF2F2", color: "#DC2626", padding: "3px 8px", borderRadius: 8, border: "1px solid #FCA5A5" }}>
-                        ⚡ Ultra-High Shake Sensitivity Enabled
+                      <span style={{ fontSize: 10, fontWeight: 900, background: "#F0FDF4", color: "#166534", padding: "3px 8px", borderRadius: 8, border: "1px solid #BBF7D0" }}>
+                        🛡️ Strong Shake Protection Active
                       </span>
                       <button
                         type="button"
                         onClick={() => {
-                          toast.error("🧪 Simulated Low Phone Shake Triggered!", { icon: "📱" });
+                          toast.error("🧪 Simulated Strong Phone Shake Triggered!", { icon: "🚨" });
                           startSosCountdown();
                         }}
                         style={{ fontSize: 10, fontWeight: 800, background: "#8B3A2A", color: "#fff", padding: "3px 8px", borderRadius: 8, border: "none", cursor: "pointer" }}
-                        title="Simulate low shake for testing"
+                        title="Simulate strong shake for testing"
                       >
-                        Test Low Shake
+                        Test Strong Shake
                       </button>
                     </div>
                   </div>
