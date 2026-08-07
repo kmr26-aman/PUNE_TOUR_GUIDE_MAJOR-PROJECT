@@ -126,6 +126,8 @@ export default function App() {
           <HomeScreen
             onPlaceSelect={handlePlaceSelect}
             onSearchClick={handleSearchClick}
+            onNavigateToCreatePost={handleNavigateToCreatePost}
+            onNavigateTab={(tab) => setActiveTab(tab)}
             userLocation={userLocation}
             userLanguage={userLanguage}
             weatherData={weatherData}

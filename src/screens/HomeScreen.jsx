@@ -72,9 +72,22 @@ function resolvePuneAddress(lat, lng) {
   return `Live Pin (${lat.toFixed(4)}, ${lng.toFixed(4)}), Pune`;
 }
 
-export default function HomeScreen({ onPlaceSelect, onSearchClick, userLocation, userLanguage, weatherData, isDarkMode }) {
+function getHaversineDistance(lat1, lon1, lat2, lon2) {
+  if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) return 9999;
+  const R = 6371;
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+export default function HomeScreen({ onPlaceSelect, onSearchClick, onNavigateToCreatePost, onNavigateTab, userLocation, userLanguage, weatherData, isDarkMode }) {
   const [activeCategory, setActiveCategory] = useState("All");
-  const [places, setPlaces] = useState([]);
+  const [allPlaces, setAllPlaces] = useState([]);
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   
@@ -333,11 +346,11 @@ export default function HomeScreen({ onPlaceSelect, onSearchClick, userLocation,
       setLoading(true);
       try {
         const [placesData, eventsData] = await Promise.all([
-          fetchPlaces({ category: activeCategory }),
+          fetchPlaces(),
           fetchEvents()
         ]);
-        setPlaces(placesData);
-        setEvents(eventsData);
+        setAllPlaces(placesData || []);
+        setEvents(eventsData || []);
       } catch (error) {
         console.error("Failed to load home data:", error);
       } finally {
@@ -345,15 +358,79 @@ export default function HomeScreen({ onPlaceSelect, onSearchClick, userLocation,
       }
     };
     loadData();
-  }, [activeCategory]);
+  }, []);
+
+  const userLat = userLocation?.lat || mapPickerCoords.lat || 18.5204;
+  const userLng = userLocation?.lng || mapPickerCoords.lng || 73.8567;
+
+  // Memoized place filtering & Top 10 Nearby distance calculations
+  const places = (function() {
+    if (!allPlaces || allPlaces.length === 0) return [];
+
+    if (activeCategory === "Nearby 📍" || activeCategory === "Nearby") {
+      const placesWithDist = allPlaces.map(p => {
+        const pLat = p.latitude || p.lat || 18.5204;
+        const pLng = p.longitude || p.lng || 73.8567;
+        const distKm = getHaversineDistance(userLat, userLng, pLat, pLng);
+        return { ...p, calculatedDistance: distKm };
+      });
+      placesWithDist.sort((a, b) => a.calculatedDistance - b.calculatedDistance);
+      return placesWithDist.slice(0, 10);
+    }
+
+    if (activeCategory === "All") return allPlaces;
+
+    return allPlaces.filter(p => (p.category || "").toLowerCase() === activeCategory.toLowerCase());
+  })();
 
   const handleVoiceSearch = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      try {
+        const recognition = new SpeechRecognition();
+        recognition.lang = userLanguage === "Marathi" ? "mr-IN" : "en-IN";
+        recognition.interimResults = false;
+
+        setIsVoiceSearching(true);
+        toast("Listening... Speak place name 🎤", { icon: "🎤" });
+
+        recognition.onresult = (event) => {
+          setIsVoiceSearching(false);
+          const transcript = event.results[0][0].transcript;
+          toast.success(`Voice Recognized: "${transcript}"`);
+
+          const lower = transcript.toLowerCase();
+          const matched = allPlaces.find(p => p.name.toLowerCase().includes(lower) || (p.name_mr && p.name_mr.includes(transcript)));
+          if (matched) {
+            onPlaceSelect(matched);
+          } else {
+            onSearchClick({ q: transcript });
+          }
+        };
+
+        recognition.onerror = () => {
+          setIsVoiceSearching(false);
+          toast.error("Voice search failed. Opening search...");
+          onSearchClick({ q: "" });
+        };
+
+        recognition.onend = () => {
+          setIsVoiceSearching(false);
+        };
+
+        recognition.start();
+        return;
+      } catch (e) {
+        console.warn("SpeechRecognition error:", e);
+      }
+    }
+
     setIsVoiceSearching(true);
-    toast.success("Listening... Speak search query (e.g. Shaniwar Wada)");
+    toast("Listening... Speak search query 🎤", { icon: "🎤" });
     setTimeout(() => {
       setIsVoiceSearching(false);
-      onSearchClick({ query: "Shaniwar Wada" });
-    }, 2500);
+      onSearchClick({ q: "Shaniwar Wada" });
+    }, 2000);
   };
 
   const bgMain = isDarkMode ? "bg-[#181311] text-[#FAF6F0]" : "bg-[#FBF8F3] text-[#1C1412]";
@@ -637,15 +714,22 @@ export default function HomeScreen({ onPlaceSelect, onSearchClick, userLocation,
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => onSearchClick({ tab: "createPost" })}
-              className="bg-white text-[#8B3A2A] px-3 py-1.5 rounded-xl text-xs font-black hover:bg-amber-50 transition-all flex items-center gap-1 shadow-xs"
+              onClick={() => {
+                if (onNavigateToCreatePost) onNavigateToCreatePost();
+                else if (onNavigateTab) onNavigateTab("createPost");
+                else onSearchClick({ tab: "createPost" });
+              }}
+              className="bg-white text-[#8B3A2A] px-3.5 py-1.5 rounded-xl text-xs font-black hover:bg-amber-50 transition-all flex items-center gap-1 shadow-xs active:scale-95"
             >
               <Camera size={14} />
               <span>Post</span>
             </button>
             <button
-              onClick={() => toast.success("Checked in at Shaniwar Wada 📍 (+20 XP)")}
-              className="bg-amber-400 text-gray-900 px-3 py-1.5 rounded-xl text-xs font-black hover:bg-amber-300 transition-all flex items-center gap-1 shadow-xs"
+              onClick={() => {
+                if (onNavigateTab) onNavigateTab("map");
+                else onSearchClick({ tab: "map" });
+              }}
+              className="bg-amber-400 text-gray-900 px-3.5 py-1.5 rounded-xl text-xs font-black hover:bg-amber-300 transition-all flex items-center gap-1 shadow-xs active:scale-95"
             >
               <MapPin size={14} />
               <span>Check-in</span>
@@ -654,27 +738,47 @@ export default function HomeScreen({ onPlaceSelect, onSearchClick, userLocation,
         </div>
 
         {showFabMenu && (
-          <div className="mt-2.5 bg-white dark:bg-[#241E1C] p-3 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm flex justify-around animate-in fade-in zoom-in duration-200">
+          <div className="mt-2.5 bg-white dark:bg-[#241E1C] p-3.5 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm flex justify-around animate-in fade-in zoom-in duration-200">
             <button
-              onClick={() => { setShowFabMenu(false); onSearchClick({ tab: "createPost" }); }}
+              onClick={() => {
+                setShowFabMenu(false);
+                if (onNavigateToCreatePost) onNavigateToCreatePost();
+                else if (onNavigateTab) onNavigateTab("createPost");
+                else onSearchClick({ tab: "createPost" });
+              }}
               className="flex items-center gap-2 text-xs font-bold text-[#8B3A2A] hover:underline"
             >
               <Camera size={16} />
-              <span>Share Pune Moment 📷</span>
+              <span>Share Pune Moment (Post) 📷</span>
             </button>
             <button
-              onClick={() => { setShowFabMenu(false); toast.success("Checked in at Shaniwar Wada 📍 (+20 XP)"); }}
+              onClick={() => {
+                setShowFabMenu(false);
+                if (onNavigateTab) onNavigateTab("map");
+                else onSearchClick({ tab: "map" });
+              }}
               className="flex items-center gap-2 text-xs font-bold text-emerald-600 hover:underline"
             >
               <MapPin size={16} />
-              <span>GPS Live Check-in 📍</span>
+              <span>Check-in on Map 📍</span>
             </button>
           </div>
         )}
       </div>
       <div className="mb-4">
         <div className="px-4 flex justify-between items-center mb-2.5">
-          <h2 className={`text-sm font-extrabold ${textTitle}`}>{t.popularSpots || "Popular Spots in Pune"}</h2>
+          <div className="flex items-center gap-2">
+            <h2 className={`text-sm font-extrabold ${textTitle}`}>
+              {activeCategory === "Nearby 📍" || activeCategory === "Nearby"
+                ? "Top 10 Nearest Places 📍"
+                : t.popularSpots || "Popular Spots in Pune"}
+            </h2>
+            {(activeCategory === "Nearby 📍" || activeCategory === "Nearby") && (
+              <span className="text-[10px] font-bold bg-[#8B3A2A]/10 text-[#8B3A2A] px-2 py-0.5 rounded-full">
+                Top 10 Sorted by Distance
+              </span>
+            )}
+          </div>
           <button onClick={() => onSearchClick()} className="text-xs font-bold text-[#8B3A2A] hover:underline">
             {t.seeAll || "See all"}
           </button>

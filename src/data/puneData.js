@@ -1,5 +1,4 @@
-// ── CATEGORIES ────────────────────────────────────────────
-export const categories = ["All", "Heritage", "Temple", "Nature", "Food", "Wellness"];
+export const categories = ["All", "Nearby 📍", "Heritage", "Temple", "Nature", "Food", "Wellness"];
 
 // ── PLACES DATA ──────────────────────────────────────────
 export const places = [
